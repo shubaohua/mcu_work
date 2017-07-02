@@ -64,8 +64,9 @@
 // Global CONSTANTS
 //-----------------------------------------------------------------------------
 
-#define SYSCLK      24500000           // SYSCLK frequency in Hz
-#define BAUDRATE        9600           // Baud rate of UART in bps
+#define SYSCLK      24500000           	// SYSCLK frequency in Hz
+#define BAUDRATE        9600           	// Baud rate of UART in bps
+#define AUX			   P1_B7			// Descriptive name for P1.7
 
 //-----------------------------------------------------------------------------
 // Function PROTOTYPES
@@ -128,18 +129,49 @@ void main (void)
 //
 // Configure the Crossbar and GPIO ports.
 //
-// P0.4   digital   push-pull    UART TX
-// P0.5   digital   open-drain   UART RX
+// P0.0	  digital   push-pull    IDA0 (Pin17)
+// P0.1   digital   push-pull    IDA1 (Pin18)
+// P0.2	  digital   push-pull    TX0 (Pin21)
+// P0.3   digital   push-pull    MISO (Pin20)
+// P0.4   digital   push-pull    UART TX (Pin21)
+// P0.5   digital   open-drain   UART RX (Pin22)
+// P0.6   digital	push-pull	 MOSI (Pin23)
+// P0.7   digital   push-pull    CS (Pin24)
+// P1.0   analog
+// P1.1   analog
+// P1.2   digital   open-drain   SDA (Pin11)
+// P1.3   digital   open-drain	 SCL (Pin12)
+// P1.4   digital   push-pull    CEX0 (Pin13)
+// P1.5   digital   push-pull    CEX1 (Pin14)
+// P1.6   digital   push-pull    IO (Pin15)
 // P1.7   digital   open-drain   E32 AUX
+// P2.0	  digital   push-pull	 Realy1
+// P2.1   digital   push-pull    Relay2
 //
 //-----------------------------------------------------------------------------
 
 void PORT_Init (void)
 {
-   P0MDOUT |= P0MDOUT_B4__PUSH_PULL;    // Enable UTX as push-pull output
-   P1MDIN  |= P1MDIN_B7__DIGITAL;		// Enable AUX as digital input
-   XBR0     = 0x01;                    	// Enable UART on P0.4(TX) and P0.5(RX)
-   XBR1     = 0x40;                    	// Enable crossbar and weak pull-ups
+   P0MDOUT 	= P0MDOUT_B0__PUSH_PULL | P0MDOUT_B1__PUSH_PULL | P0MDOUT_B2__PUSH_PULL
+		   	| P0MDOUT_B3__PUSH_PULL | P0MDOUT_B4__PUSH_PULL | P0MDOUT_B5__OPEN_DRAIN
+		    | P0MDOUT_B6__PUSH_PULL | P0MDOUT_B7__PUSH_PULL;
+   P1MDIN   = P1MDIN_B0__ANALOG  | P1MDIN_B1__ANALOG  | P1MDIN_B2__DIGITAL
+            | P1MDIN_B3__DIGITAL | P1MDIN_B4__DIGITAL | P1MDIN_B5__DIGITAL
+            | P1MDIN_B6__DIGITAL | P1MDIN_B7__DIGITAL;
+   P1MDOUT  = P1MDOUT_B0__OPEN_DRAIN | P1MDOUT_B1__OPEN_DRAIN | P1MDOUT_B2__OPEN_DRAIN
+		    | P1MDOUT_B3__OPEN_DRAIN | P1MDOUT_B4__PUSH_PULL  | P1MDOUT_B5__PUSH_PULL
+            | P1MDOUT_B6__PUSH_PULL  | P1MDOUT_B7__OPEN_DRAIN;
+   // Analog inputs pins should be skipped by the crossbar
+   P1SKIP   = P1SKIP_B0__SKIPPED | P1SKIP_B1__SKIPPED | P1SKIP_B2__NOT_SKIPPED
+            | P1SKIP_B3__NOT_SKIPPED | P1SKIP_B4__NOT_SKIPPED | P1SKIP_B5__NOT_SKIPPED
+            | P1SKIP_B6__NOT_SKIPPED | P1SKIP_B7__NOT_SKIPPED;
+   P2MDOUT 	= P2MDOUT_B0__PUSH_PULL | P2MDOUT_B1__PUSH_PULL;
+
+   // Enable UART on P0.4(TX) and P0.5(RX)，I2C & SPI
+   XBR0     = XBR0_URT0E__ENABLED | XBR0_SPI0E__ENABLED | XBR0_SMB0E__ENABLED;
+
+   // Enable crossbar, weak pull-ups and CEX0/CEX1
+   XBR1     = XBR1_XBARE__ENABLED | XBR1_WEAKPUD__PULL_UPS_ENABLED | XBR1_PCA0ME__CEX0_CEX1;
 }
 
 //-----------------------------------------------------------------------------
@@ -199,10 +231,10 @@ void UART0_Init (void)
    TL1 = TH1;                          // init Timer1
    TMOD &= ~0xf0;                      // TMOD: timer 1 in 8-bit autoreload
    TMOD |=  0x20;
-   TCON_TR1 = 1;                            // START Timer1
+   TCON_TR1 = 1;                       // START Timer1
    TX_Ready = 1;                       // Flag showing that UART can transmit
-   IP |= 0x10;                         // Make UART high priority
-   IE_ES0 = 1;                            // Enable UART0 interrupts
+   IP |= 0x10;						   // Make UART high priority
+   IE_ES0 = 1;						   // Enable UART0 interrupts
 }
 
 //-----------------------------------------------------------------------------
