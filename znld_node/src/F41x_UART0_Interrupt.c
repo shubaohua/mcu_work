@@ -130,14 +130,16 @@ void main (void)
 //
 // P0.4   digital   push-pull    UART TX
 // P0.5   digital   open-drain   UART RX
+// P1.7   digital   open-drain   E32 AUX
 //
 //-----------------------------------------------------------------------------
 
 void PORT_Init (void)
 {
-   P0MDOUT |= 0x10;                    // Enable UTX as push-pull output
-   XBR0     = 0x01;                    // Enable UART on P0.4(TX) and P0.5(RX)
-   XBR1     = 0x40;                    // Enable crossbar and weak pull-ups
+   P0MDOUT |= 0x10;                    	// Enable UTX as push-pull output
+   P1MDIN 	= P1MDIN_B7__DIGITAL;		// Enable AUX as digital input
+   XBR0     = 0x01;                    	// Enable UART on P0.4(TX) and P0.5(RX)
+   XBR1     = 0x40;                    	// Enable crossbar and weak pull-ups
 }
 
 //-----------------------------------------------------------------------------
