@@ -237,6 +237,43 @@ void UART0_Init (void)
    IE_ES0 = 1;						   // Enable UART0 interrupts
 }
 
+
+//-----------------------------------------------------------------------------
+// CRC16 Service Routines
+//-----------------------------------------------------------------------------
+void crc16_init(unsigned int seed)
+{
+}
+
+void crc16_add(unsigned short byte)
+{
+}
+
+unsigned short crc16_msb(void)
+{
+    return msb;
+}
+
+unsigned short crc16_lsb(void)
+{
+    return lsb;
+}
+
+
+//-----------------------------------------------------------------------------
+// Frame Process Routines
+// When data are ready in UART_RX_buffer, this function will be called.
+// Depending on different roles (STA=0, RELAY=1) of node, deal with the data in
+// different way.
+// STA: process only frames with dest_id == self or dest_id == broadcast_id.
+// RELAY: in addition to what STA does, it will relay broadcast frames and frames
+// to other nodes (dest_id != self).
+//-----------------------------------------------------------------------------
+void rx_frame_process(unsigned short role)
+{
+}
+
+
 //-----------------------------------------------------------------------------
 // Interrupt Service Routines
 //-----------------------------------------------------------------------------
@@ -245,61 +282,104 @@ void UART0_Init (void)
 // UART0_Interrupt
 //-----------------------------------------------------------------------------
 //
-// This routine is invoked whenever a character is entered or displayed on the
-// Hyperterminal.
-//
+// UART receiving routine for protocol frame receiving only
+// The process is,
+// 1. detect & receive until get HEADER correctly 
+// 2. continue receiving bytes until the whole frame is received (22 bytes currently)
+// 3. calculate CRC16, if match return the whole frame to RX protocol processing
 //-----------------------------------------------------------------------------
 
+#define FRAME_HEADER 0x55
+#define FRAME_CRC_S 20
+#define FRAME_LEN 22
 INTERRUPT(UART0_Interrupt, 4)
 {
-   if (SCON0_RI == 1)
-   {
-      if( UART_Buffer_Size == 0)  {      // If new word is entered
-         UART_Input_First = 0;    }
+    static unsigned short idx = 0;
+    IE_ES0 = 0;   // disable UART interrupt
 
-      SCON0_RI = 0;                           // Clear interrupt flag
+    if (SCON0_RI == 1)
+    {
+        SCON0_RI = 0;                           // Clear interrupt flag
+        byte = SBUF0;                      // Read a character from UART
+        if (idx == 0) {
+            if (byte == FRAME_HEADER) {
+                UART_RX_buffer[idx++] = byte;
+                crc16_init(0xFFFF);
+                crc16_add(byte);
+            }
+        } else if (idx == 1) {
+            if (byte == FRAME_HEADER) {
+                UART_RX_buffer[idx++] = byte;
+                crc16_add(byte);
+            } else
+                idx = 0;
+        } else if (idx >= 2 && idx < FRAME_CRC_S) {
+            UART_RX_buffer[idx++] = byte;
+            crc16_add(byte);
+        } else if (idx < FRAME_LEN && idx >= FRAME_CRC_S) {
+            UART_RX_buffer[idx++] = byte;
+        }
 
-      Byte = SBUF0;                      // Read a character from UART
+        if (idx == FRAME_LEN) {
+            if (crc16_msb() == UART_RX_buffer[FRAME_CRC_S] &&
+                   crc16_lsb() == UART_RX_buffer[FRAME_CRC_S + 1])
+               rx_frame_process(role);
+            idx = 0 
+        }
+    }
 
-      if (UART_Buffer_Size < UART_BUFFERSIZE)
-      {
-         UART_Buffer[UART_Input_First] = Byte; // Store in array
+    IE_ES0 = 1;   // enable UART interrupt
 
-         UART_Buffer_Size++;             // Update array's size
+    /* sample codes for reference only
+       if (SCON0_RI == 1)
+       {
+       if( UART_Buffer_Size == 0)  {      // If new word is entered
+       UART_Input_First = 0;    }
 
-         UART_Input_First++;             // Update counter
-      }
-   }
+       SCON0_RI = 0;                           // Clear interrupt flag
 
-   if (SCON0_TI == 1)                   // Check if transmit flag is set
-   {
-      SCON0_TI = 0;                           // Clear interrupt flag
+       Byte = SBUF0;                      // Read a character from UART
 
-      if (UART_Buffer_Size != 1)         // If buffer not empty
-      {
-         // If a new word is being output
-         if ( UART_Buffer_Size == UART_Input_First ) {
-              UART_Output_First = 0;  }
+       if (UART_Buffer_Size < UART_BUFFERSIZE)
+       {
+       UART_Buffer[UART_Input_First] = Byte; // Store in array
 
-         // Store a character in the variable byte
-         Byte = UART_Buffer[UART_Output_First];
+       UART_Buffer_Size++;             // Update array's size
 
-         if ((Byte >= 0x61) && (Byte <= 0x7A)) { // If upper case letter
-            Byte -= 32; }
+       UART_Input_First++;             // Update counter
+       }
+       }
 
-         SBUF0 = Byte;                   // Transmit to Hyperterminal
+       if (SCON0_TI == 1)                   // Check if transmit flag is set
+       {
+       SCON0_TI = 0;                           // Clear interrupt flag
 
-         UART_Output_First++;            // Update counter
+       if (UART_Buffer_Size != 1)         // If buffer not empty
+       {
+    // If a new word is being output
+    if ( UART_Buffer_Size == UART_Input_First ) {
+    UART_Output_First = 0;  }
 
-         UART_Buffer_Size--;             // Decrease array size
+    // Store a character in the variable byte
+    Byte = UART_Buffer[UART_Output_First];
 
-      }
-      else
-      {
-         UART_Buffer_Size = 0;            // Set the array size to 0
-         TX_Ready = 1;                    // Indicate transmission complete
-      }
-   }
+    if ((Byte >= 0x61) && (Byte <= 0x7A)) { // If upper case letter
+    Byte -= 32; }
+
+    SBUF0 = Byte;                   // Transmit to Hyperterminal
+
+    UART_Output_First++;            // Update counter
+
+    UART_Buffer_Size--;             // Decrease array size
+
+    }
+    else
+    {
+    UART_Buffer_Size = 0;            // Set the array size to 0
+    TX_Ready = 1;                    // Indicate transmission complete
+    }
+    }
+    */ 
 }
 
 //-----------------------------------------------------------------------------
