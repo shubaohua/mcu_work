@@ -259,6 +259,75 @@ unsigned short crc16_lsb(void)
     return lsb;
 }
 
+//-----------------------------------------------------------------------------
+// rx processing misc routines
+//-----------------------------------------------------------------------------
+#define FRAME_SRC_ID_S  2
+#define FRAME_DEST_ID_S 8
+#define FRAME_ID_LEN    6
+#define RECV_SRC_ID (& UART_RX_buffer[FRAME_SRC_ID_S])
+#define RECV_DEST_ID (& UART_RX_buffer[FRAME_DEST_ID_S])
+unsigned short is_my_frame()
+{
+    unsigned short result = 0;
+    short i;
+
+    for (i=0; i<FRAME_ID_LEN; i++)
+        if (self_id[i] != RECV_DEST_ID[i]) break;
+    if (i == FRAME_ID_LEN) result = 1;
+    return result;
+}
+
+unsigned short is_broadcast_frame()
+{
+    unsigned short result = 0;
+    short i;
+
+    for (i=0; i<FRAME_ID_LEN; i++)
+        if (0 != RECV_DEST_ID[i]) break;
+    if (i == FRAME_ID_LEN) result = 1;
+    return result;
+}
+
+void sleep(unsigned short seconds)
+{
+}
+
+// return a random value in [0, range], note range is included.
+unsigned short random(unsigned short range)
+{
+    unsigned short value = 0;
+    return value;
+}
+
+#define FRAME_TAG_S     15
+#define FRAME_VALUE_S   16
+#define FRAME_CRC_S     20
+#define RECV_TAG (UART_RX_buffer[FRAME_TAG_S])
+#define RECV_VALUE (& UART_RX_buffer[FRAME_VALUE_S])
+#define RECV_CRC (& UART_RX_buffer[FRAME_CRC_S])
+
+// Protocol TAG definitions
+#define PTAG_ACK        1
+#define PTAG_NACK       2
+#define PTAG_POLL       3
+#define PTAG_POLL_ACK   4
+#define PTAG_LAMP_CTRL  5
+void rx_cmd_process(unsigned short isBroadcastFrame)
+{
+    switch (RECV_TAG) {
+        // all *_resonse() below need to fill in UART_TX_buffer
+        case PTAG_POLL:
+            do_poll_response();
+            break;
+        case PTAG_LAMP_CTRL:
+            do_lamp_ctrl_response();
+            break;
+        default:
+            do_nack_response();
+    }
+    send_frame();
+}
 
 //-----------------------------------------------------------------------------
 // Frame Process Routines
@@ -267,9 +336,55 @@ unsigned short crc16_lsb(void)
 // different way.
 // STA: process only frames with dest_id == self or dest_id == broadcast_id.
 // RELAY: in addition to what STA does, it will relay broadcast frames and frames
-// to other nodes (dest_id != self).
+// to other nodes (dest_id != self) with some delay.
 //-----------------------------------------------------------------------------
+
+unsigned short self_id[6];
+unsigned short role; // 0: STA; 1: RELAY
+unsigned short sn; // frame sequence number
+#define RECV_SN (UART_RX_buffer[FRAME_SN])
 void rx_frame_process(unsigned short role)
+{
+    unsigned short isMyFrame = is_my_frame();
+    unsigned short isBroadcastFrame = is_broadcast_frame();
+
+    // common cmd process for STA & RELAY
+    if (isMyFrame || isBroadcastFrame) {
+        if (RECV_SN > sn || (RECV_SN == 0 && sn != 0)) {
+            sn = RECV_SN;
+            rx_cmd_process(isBroadcastFrame);
+        }
+    }
+
+    // RELAY specific things
+    if (role == 1)
+        if (!isMyFrame) {
+            if (RECV_SN > sn || (RECV_SN == 0 && sn != 0)) {
+                sn = RECV_SN;
+                sleep(1 + random(3));
+                forward_preparation();
+                send_frame();
+            }
+        } else if (isBroadcastFrame()) {
+            sleep(random(3));
+            forward_preparation();
+            send_frame();
+        }
+    }
+}
+
+
+//-----------------------------------------------------------------------------
+// TX Routines
+//-----------------------------------------------------------------------------
+
+// send UART_TX_buffer to UART byte by byte
+void send_frame()
+{
+}
+
+// duplicate UART_RX_buffer into UART_TX_buffer
+void forward_preparation()
 {
 }
 
@@ -291,6 +406,7 @@ void rx_frame_process(unsigned short role)
 
 #define FRAME_HEADER 0x55
 #define FRAME_CRC_S 20
+#define FRAME_SN 14
 #define FRAME_LEN 22
 INTERRUPT(UART0_Interrupt, 4)
 {
