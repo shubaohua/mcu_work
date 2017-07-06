@@ -347,30 +347,32 @@ void rx_frame_process(unsigned short role)
 {
     unsigned short isMyFrame = is_my_frame();
     unsigned short isBroadcastFrame = is_broadcast_frame();
+    unsigned short need_forward = 0;
 
     // common cmd process for STA & RELAY
     if (isMyFrame || isBroadcastFrame) {
         if (RECV_SN > sn || (RECV_SN == 0 && sn != 0)) {
             sn = RECV_SN;
+            need_forward = 1;
             rx_cmd_process(isBroadcastFrame);
         }
     }
 
     // RELAY specific things
     if (role == 1)
-        if (!isMyFrame) {
+        if (isBroadcastFrame() && need_forward) {
+            sleep(random(3));
+            forward_preparation();
+            send_frame();
+        } else if (!isMyFrame) {
             if (RECV_SN > sn || (RECV_SN == 0 && sn != 0)) {
                 sn = RECV_SN;
                 sleep(1 + random(3));
                 forward_preparation();
                 send_frame();
             }
-        } else if (isBroadcastFrame()) {
-            sleep(random(3));
-            forward_preparation();
-            send_frame();
         }
-    }
+}
 }
 
 
