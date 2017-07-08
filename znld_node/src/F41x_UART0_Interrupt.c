@@ -157,6 +157,10 @@ void main (void)
 
 void PORT_Init (void)
 {
+	   P0MDOUT |= 0x10;                    // Enable UTX as push-pull output
+	   XBR0     = 0x01;                    // Enable UART on P0.4(TX) and P0.5(RX)
+	   XBR1     = 0x40;                    // Enable crossbar and weak pull-ups
+	/*
    P0MDOUT 	= P0MDOUT_B0__PUSH_PULL | P0MDOUT_B1__PUSH_PULL | P0MDOUT_B2__PUSH_PULL
 		   	| P0MDOUT_B3__PUSH_PULL | P0MDOUT_B4__PUSH_PULL | P0MDOUT_B5__OPEN_DRAIN
 		    | P0MDOUT_B6__PUSH_PULL | P0MDOUT_B7__PUSH_PULL;
@@ -177,6 +181,7 @@ void PORT_Init (void)
 
    // Enable crossbar, weak pull-ups and CEX0/CEX1
    XBR1     = XBR1_XBARE__ENABLED | XBR1_WEAKPUD__PULL_UPS_ENABLED | XBR1_PCA0ME__CEX0_CEX1;
+   */
 }
 
 //-----------------------------------------------------------------------------
@@ -431,7 +436,7 @@ void rx_frame_process(unsigned short role)
 //
 // UART receiving routine for protocol frame receiving only
 // The process is,
-// 1. detect & receive until get HEADER correctly 
+// 1. detect & receive until get HEADER correctly
 // 2. continue receiving bytes until the whole frame is received (22 bytes currently)
 // 3. calculate CRC16, if match return the whole frame to RX protocol processing
 //-----------------------------------------------------------------------------
@@ -442,7 +447,9 @@ void rx_frame_process(unsigned short role)
 #define FRAME_LEN 22
 INTERRUPT(UART0_Interrupt, 4)
 {
-    static unsigned short idx = 0;
+/*
+
+ static unsigned short idx = 0;
     IE_ES0 = 0;   // disable UART interrupt
 
     if (SCON0_RI == 1)
@@ -477,57 +484,55 @@ INTERRUPT(UART0_Interrupt, 4)
     }
 
     IE_ES0 = 1;   // enable UART interrupt
+*/
+	if (SCON0_RI == 1)
+	   {
+	      if( UART_Buffer_Size == 0)  {      // If new word is entered
+	         UART_Input_First = 0;    }
 
-    /* sample codes for reference only
-       if (SCON0_RI == 1)
-       {
-       if( UART_Buffer_Size == 0)  {      // If new word is entered
-       UART_Input_First = 0;    }
+	      SCON0_RI = 0;                           // Clear interrupt flag
 
-       SCON0_RI = 0;                           // Clear interrupt flag
+	      Byte = SBUF0;                      // Read a character from UART
 
-       Byte = SBUF0;                      // Read a character from UART
+	      if (UART_Buffer_Size < UART_BUFFERSIZE)
+	      {
+	         UART_Buffer[UART_Input_First] = Byte; // Store in array
 
-       if (UART_Buffer_Size < UART_BUFFERSIZE)
-       {
-       UART_Buffer[UART_Input_First] = Byte; // Store in array
+	         UART_Buffer_Size++;             // Update array's size
 
-       UART_Buffer_Size++;             // Update array's size
+	         UART_Input_First++;             // Update counter
+	      }
+	   }
 
-       UART_Input_First++;             // Update counter
-       }
-       }
+	   if (SCON0_TI == 1)                   // Check if transmit flag is set
+	   {
+	      SCON0_TI = 0;                           // Clear interrupt flag
 
-       if (SCON0_TI == 1)                   // Check if transmit flag is set
-       {
-       SCON0_TI = 0;                           // Clear interrupt flag
+	      if (UART_Buffer_Size != 1)         // If buffer not empty
+	      {
+	         // If a new word is being output
+	         if ( UART_Buffer_Size == UART_Input_First ) {
+	              UART_Output_First = 0;  }
 
-       if (UART_Buffer_Size != 1)         // If buffer not empty
-       {
-    // If a new word is being output
-    if ( UART_Buffer_Size == UART_Input_First ) {
-    UART_Output_First = 0;  }
+	         // Store a character in the variable byte
+	         Byte = UART_Buffer[UART_Output_First];
 
-    // Store a character in the variable byte
-    Byte = UART_Buffer[UART_Output_First];
+	         if ((Byte >= 0x61) && (Byte <= 0x7A)) { // If upper case letter
+	            Byte -= 32; }
 
-    if ((Byte >= 0x61) && (Byte <= 0x7A)) { // If upper case letter
-    Byte -= 32; }
+	         SBUF0 = Byte;                   // Transmit to Hyperterminal
 
-    SBUF0 = Byte;                   // Transmit to Hyperterminal
+	         UART_Output_First++;            // Update counter
 
-    UART_Output_First++;            // Update counter
+	         UART_Buffer_Size--;             // Decrease array size
 
-    UART_Buffer_Size--;             // Decrease array size
-
-    }
-    else
-    {
-    UART_Buffer_Size = 0;            // Set the array size to 0
-    TX_Ready = 1;                    // Indicate transmission complete
-    }
-    }
-    */ 
+	      }
+	      else
+	      {
+	         UART_Buffer_Size = 0;            // Set the array size to 0
+	         TX_Ready = 1;                    // Indicate transmission complete
+	      }
+	   }
 }
 
 //-----------------------------------------------------------------------------
