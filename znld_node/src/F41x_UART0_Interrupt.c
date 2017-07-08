@@ -67,6 +67,9 @@
 #define SYSCLK      24500000           	// SYSCLK frequency in Hz
 #define BAUDRATE        9600           	// Baud rate of UART in bps
 #define AUX			   P1_B7			// Descriptive name for P1.7
+#define FRAME_SRC_ID_S  2	// src address start index
+#define FRAME_DEST_ID_S 8	// dest address start index
+
 
 //-----------------------------------------------------------------------------
 // Function PROTOTYPES
@@ -82,7 +85,7 @@ void Timer2_Init (S16);
 // Global Variables
 //-----------------------------------------------------------------------------
 
-#define UART_BUFFERSIZE 64
+#define UART_BUFFERSIZE 22
 U8 UART_Buffer[UART_BUFFERSIZE];
 U8 UART_Buffer_Size = 0;
 U8 UART_Input_First = 0;
@@ -92,7 +95,10 @@ static char Byte;
 
 //add code @2017-07-08 from eric S
 #define FRAME_ID_LEN    6
-unsigned short self_id[FRAME_ID_LEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x05};
+unsigned char self_id[FRAME_ID_LEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x05};
+
+//#define FRAME_ID_LEN    6 //move up @2017-07-08 from eric S
+unsigned char UART_RX_buffer[UART_BUFFERSIZE];//add define @2017-07-08 from eric S
 
 //-----------------------------------------------------------------------------
 // MAIN Routine
@@ -262,12 +268,25 @@ void crc16_add(unsigned short byte)
 
 unsigned short crc16_msb(void)
 {
-    return 0xff;//msb;
+	unsigned short i;
+    U8 msb=0;
+
+	CRC0CN = 0x1d; 		// CRC initial valve 0xFF and enable
+	for (i=0; i<20; i++) {
+		CRC0IN = UART_RX_buffer[i];
+	}
+
+	msb = CRC0DAT;
+    return msb;
 }
 
 unsigned short crc16_lsb(void)
 {
-    return 0x00;//lsb;
+	U8 lsb;
+
+	CRC0CN = 0x14;
+	lsb = CRC0DAT;
+    return lsb;
 }
 
 //-----------------------------------------------------------------------------
@@ -307,12 +326,6 @@ void forward_preparation()
 //-----------------------------------------------------------------------------
 // rx processing misc routines
 //-----------------------------------------------------------------------------
-#define FRAME_SRC_ID_S  2
-#define FRAME_DEST_ID_S 8
-
-//#define FRAME_ID_LEN    6 //move up @2017-07-08 from eric S
-unsigned short UART_RX_buffer[FRAME_DEST_ID_S];//add define @2017-07-08 from eric S
-
 #define RECV_SRC_ID (& UART_RX_buffer[FRAME_SRC_ID_S])
 #define RECV_DEST_ID (& UART_RX_buffer[FRAME_DEST_ID_S])
 unsigned short is_my_frame()
@@ -485,23 +498,39 @@ INTERRUPT(UART0_Interrupt, 4)
 
     IE_ES0 = 1;   // enable UART interrupt
 */
+	 static unsigned short idx = 0;
+
 	if (SCON0_RI == 1)
 	   {
-	      if( UART_Buffer_Size == 0)  {      // If new word is entered
-	         UART_Input_First = 0;    }
-
 	      SCON0_RI = 0;                           // Clear interrupt flag
 
 	      Byte = SBUF0;                      // Read a character from UART
 
-	      if (UART_Buffer_Size < UART_BUFFERSIZE)
-	      {
-	         UART_Buffer[UART_Input_First] = Byte; // Store in array
+	      if (idx == 0) {
+	                  if (Byte == FRAME_HEADER) {
+	                      UART_RX_buffer[idx++] = Byte;
+	                      crc16_init(0xFFFF);
+	                      crc16_add(Byte);
+	                  }
+	              } else if (idx == 1) {
+	                  if (Byte == FRAME_HEADER) {
+	                      UART_RX_buffer[idx++] = Byte;
+	                      crc16_add(Byte);
+	                  } else
+	                      idx = 0;
+	              } else if (idx >= 2 && idx < FRAME_CRC_S) {
+	                  UART_RX_buffer[idx++] = Byte;
+	                  crc16_add(Byte);
+	              } else if (idx < FRAME_LEN && idx >= FRAME_CRC_S) {
+	                  UART_RX_buffer[idx++] = Byte;
+	              }
 
-	         UART_Buffer_Size++;             // Update array's size
-
-	         UART_Input_First++;             // Update counter
-	      }
+	              if (idx == FRAME_LEN) {
+	                  if (crc16_msb() == UART_RX_buffer[FRAME_CRC_S] &&
+	                         crc16_lsb() == UART_RX_buffer[FRAME_CRC_S + 1])
+	                     rx_frame_process(role);
+	                  idx = 0;
+	              }
 	   }
 
 	   if (SCON0_TI == 1)                   // Check if transmit flag is set
