@@ -90,6 +90,10 @@ U8 UART_Output_First = 0;
 U8 TX_Ready =1;
 static char Byte;
 
+//add code @2017-07-08 from eric S
+#define FRAME_ID_LEN    6
+unsigned short self_id[FRAME_ID_LEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x05};
+
 //-----------------------------------------------------------------------------
 // MAIN Routine
 //-----------------------------------------------------------------------------
@@ -98,8 +102,9 @@ void main (void)
 {
    PCA0MD &= ~0x40;                    // WDTE = 0 (clear watchdog timer
                                        // enable)
-   PORT_Init();                        // Initialize Port I/O
+
    SYSCLK_Init ();                     // Initialize Oscillator
+   PORT_Init();                        // Initialize Port I/O
    UART0_Init();
 
    IE_EA = 1;
@@ -203,6 +208,7 @@ void SYSCLK_Init (void)
 // Configure the UART0 using Timer1, for <BAUDRATE> and 8-N-1.
 //-----------------------------------------------------------------------------
 
+
 void UART0_Init (void)
 {
    SCON0 = 0x10;                       // SCON0: 8-bit variable bit rate
@@ -251,12 +257,46 @@ void crc16_add(unsigned short byte)
 
 unsigned short crc16_msb(void)
 {
-    return msb;
+    return 0xff;//msb;
 }
 
 unsigned short crc16_lsb(void)
 {
-    return lsb;
+    return 0x00;//lsb;
+}
+
+//-----------------------------------------------------------------------------
+// process related add some function defien here @2017-07-08 from Eric S
+//-----------------------------------------------------------------------------
+void do_nack_response()
+{
+	return ;
+}
+
+void do_poll_response()
+{
+	return ;
+}
+
+void do_lamp_ctrl_response()
+{
+	return ;
+}
+
+
+//-----------------------------------------------------------------------------
+// TX Routines
+//-----------------------------------------------------------------------------
+
+// send UART_TX_buffer to UART byte by byte
+void send_frame()
+{
+	return;
+}
+
+// duplicate UART_RX_buffer into UART_TX_buffer
+void forward_preparation()
+{
 }
 
 //-----------------------------------------------------------------------------
@@ -264,7 +304,10 @@ unsigned short crc16_lsb(void)
 //-----------------------------------------------------------------------------
 #define FRAME_SRC_ID_S  2
 #define FRAME_DEST_ID_S 8
-#define FRAME_ID_LEN    6
+
+//#define FRAME_ID_LEN    6 //move up @2017-07-08 from eric S
+unsigned short UART_RX_buffer[FRAME_DEST_ID_S];//add define @2017-07-08 from eric S
+
 #define RECV_SRC_ID (& UART_RX_buffer[FRAME_SRC_ID_S])
 #define RECV_DEST_ID (& UART_RX_buffer[FRAME_DEST_ID_S])
 unsigned short is_my_frame()
@@ -339,9 +382,11 @@ void rx_cmd_process(unsigned short isBroadcastFrame)
 // to other nodes (dest_id != self) with some delay.
 //-----------------------------------------------------------------------------
 
-unsigned short self_id[6];
+//unsigned short self_id[6]; // move up @2017-07-08 from eric
+
 unsigned short role; // 0: STA; 1: RELAY
 unsigned short sn; // frame sequence number
+#define FRAME_SN 14 // add define @2017-07-8 from eric
 #define RECV_SN (UART_RX_buffer[FRAME_SN])
 void rx_frame_process(unsigned short role)
 {
@@ -360,7 +405,7 @@ void rx_frame_process(unsigned short role)
 
     // RELAY specific things
     if (role == 1)
-        if (isBroadcastFrame() && need_forward) {
+        if (isBroadcastFrame && need_forward) { // change isBroadcastFrame() to isBroadcastFrame @2017-07-08 from eric s
             sleep(random(3));
             forward_preparation();
             send_frame();
@@ -372,22 +417,7 @@ void rx_frame_process(unsigned short role)
                 send_frame();
             }
         }
-}
-}
-
-
-//-----------------------------------------------------------------------------
-// TX Routines
-//-----------------------------------------------------------------------------
-
-// send UART_TX_buffer to UART byte by byte
-void send_frame()
-{
-}
-
-// duplicate UART_RX_buffer into UART_TX_buffer
-void forward_preparation()
-{
+// del 1 '}'  @2017-07-08 from eric
 }
 
 
@@ -418,31 +448,31 @@ INTERRUPT(UART0_Interrupt, 4)
     if (SCON0_RI == 1)
     {
         SCON0_RI = 0;                           // Clear interrupt flag
-        byte = SBUF0;                      // Read a character from UART
+        Byte = SBUF0;                      // Read a character from UART
         if (idx == 0) {
-            if (byte == FRAME_HEADER) {
-                UART_RX_buffer[idx++] = byte;
+            if (Byte == FRAME_HEADER) {
+                UART_RX_buffer[idx++] = Byte;
                 crc16_init(0xFFFF);
-                crc16_add(byte);
+                crc16_add(Byte);
             }
         } else if (idx == 1) {
-            if (byte == FRAME_HEADER) {
-                UART_RX_buffer[idx++] = byte;
-                crc16_add(byte);
+            if (Byte == FRAME_HEADER) {
+                UART_RX_buffer[idx++] = Byte;
+                crc16_add(Byte);
             } else
                 idx = 0;
         } else if (idx >= 2 && idx < FRAME_CRC_S) {
-            UART_RX_buffer[idx++] = byte;
-            crc16_add(byte);
+            UART_RX_buffer[idx++] = Byte;
+            crc16_add(Byte);
         } else if (idx < FRAME_LEN && idx >= FRAME_CRC_S) {
-            UART_RX_buffer[idx++] = byte;
+            UART_RX_buffer[idx++] = Byte;
         }
 
         if (idx == FRAME_LEN) {
             if (crc16_msb() == UART_RX_buffer[FRAME_CRC_S] &&
                    crc16_lsb() == UART_RX_buffer[FRAME_CRC_S + 1])
                rx_frame_process(role);
-            idx = 0 
+            idx = 0;
         }
     }
 
