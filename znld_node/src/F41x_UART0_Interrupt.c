@@ -84,6 +84,8 @@
 #define CMD_X_IDX			0
 #define CMD_Y_IDX		    1
 #define CMD_Z_IDX			2
+#define POLL_BACK_TAG		0X04
+
 
 
 
@@ -113,6 +115,10 @@ static char Byte;
 //add code @2017-07-08 from eric S
 #define FRAME_ID_LEN    6
 unsigned char self_id[FRAME_ID_LEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x05};
+unsigned char source_id[FRAME_ID_LEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
+#define PACKAGE_HEAD_BYTe_1		0x55
+#define PACKAGE_HEAD_BYTe_2		0x55
+unsigned char poll_package[UART_BUFFERSIZE];
 
 //#define FRAME_ID_LEN    6 //move up @2017-07-08 from eric S
 unsigned char UART_RX_buffer[UART_BUFFERSIZE];//add define @2017-07-08 from eric S
@@ -336,6 +342,45 @@ void do_nack_response()
 
 void do_poll_response()
 {
+	unsigned char send_back_frm_number = 0;
+	unsigned char i;
+
+	poll_package[0] = PACKAGE_HEAD_BYTe_1;
+	poll_package[1] = PACKAGE_HEAD_BYTe_2;
+
+	poll_package[2] = self_id[0];
+	poll_package[3] = self_id[1];
+	poll_package[4] = self_id[2];
+	poll_package[5] = self_id[3];
+	poll_package[6] = self_id[4];
+	poll_package[7] = self_id[5];
+
+	poll_package[8] = 	source_id[0];
+	poll_package[9] = 	source_id[1];
+	poll_package[10] = 	source_id[2];
+	poll_package[11] = 	source_id[3];
+	poll_package[12] = 	source_id[4];
+	poll_package[13] = 	source_id[5];
+
+	poll_package[14] = 	RECV_SN + 0x01; // frame number add 1
+
+	poll_package[15] = 	POLL_BACK_TAG;  // response tag number
+
+	poll_package[16] = 	RECV_VALUE[CMD_X_IDX];
+	poll_package[17] = 	RECV_VALUE[CMD_Y_IDX];
+	poll_package[18] = 	RECV_VALUE[CMD_Z_IDX];
+	poll_package[19] = 	0x00;
+
+
+	CRC0CN = 0x1d; 		// CRC initial valve 0xFF and enable
+	for (i=0; i<20; i++) {
+		CRC0IN = poll_package[i];
+	}
+	poll_package[20] = 	CRC0DAT;
+	CRC0CN = 0x14;
+	poll_package[21] = 	CRC0DAT;
+
+	//poll_package[8:13] = source_id
 	return ;
 }
 
@@ -378,6 +423,18 @@ void do_lamp_ctrl_response()
 // send UART_TX_buffer to UART byte by byte
 void send_frame()
 {
+	unsigned char i = 0;
+	while (AUX & 1){
+
+	}
+
+	for (i=0; i<22; i++){
+	SBUF0 = poll_package[i];
+		while (SCON0_TI != 1){
+
+		}
+	SCON0_TI = 0;
+	}
 	return;
 }
 
@@ -433,18 +490,23 @@ unsigned short random(unsigned short range)
 #define PTAG_LAMP_CTRL  5
 void rx_cmd_process(unsigned short isBroadcastFrame)
 {
-    switch (RECV_TAG) {
+    switch (RECV_TAG) {					// CMD tag
         // all *_resonse() below need to fill in UART_TX_buffer
         case PTAG_POLL:
-            do_poll_response();
+            do_poll_response();			// poll package ready
+            send_frame();
             break;
         case PTAG_LAMP_CTRL:			// lamp open/close control
             do_lamp_ctrl_response();
+            if (!isBroadcastFrame){
+            	 do_poll_response();
+            	 send_frame();
+            }
             break;
         default:
             do_nack_response();
     }
-    send_frame();
+
 }
 
 //-----------------------------------------------------------------------------
