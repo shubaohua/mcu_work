@@ -337,6 +337,44 @@ unsigned short crc16_lsb(void)
 //-----------------------------------------------------------------------------
 void do_nack_response()
 {
+	unsigned char send_back_frm_number = 0;
+		unsigned char i;
+
+		poll_package[0] = PACKAGE_HEAD_BYTe_1;
+		poll_package[1] = PACKAGE_HEAD_BYTe_2;
+
+		poll_package[2] = self_id[0];
+		poll_package[3] = self_id[1];
+		poll_package[4] = self_id[2];
+		poll_package[5] = self_id[3];
+		poll_package[6] = self_id[4];
+		poll_package[7] = self_id[5];
+
+		poll_package[8] = 	source_id[0];
+		poll_package[9] = 	source_id[1];
+		poll_package[10] = 	source_id[2];
+		poll_package[11] = 	source_id[3];
+		poll_package[12] = 	source_id[4];
+		poll_package[13] = 	source_id[5];
+
+		poll_package[14] = 	RECV_SN + 0x01; // frame number add 1
+
+		poll_package[15] = 	2;//NACK_TAG;  // response tag number
+
+		poll_package[16] = 	0x00;//RECV_VALUE[CMD_X_IDX];
+		poll_package[17] = 	0x00;//RECV_VALUE[CMD_Y_IDX];
+		poll_package[18] = 	0x00;//RECV_VALUE[CMD_Z_IDX];
+		poll_package[19] = 	0x00;
+
+
+		CRC0CN = 0x1d; 		// CRC initial valve 0xFF and enable
+		for (i=0; i<20; i++) {
+			CRC0IN = poll_package[i];
+		}
+		poll_package[20] = 	CRC0DAT;
+		CRC0CN = 0x14;
+		poll_package[21] = 	CRC0DAT;
+
 	return ;
 }
 
