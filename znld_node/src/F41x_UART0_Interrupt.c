@@ -460,45 +460,8 @@ void rx_frame_process(unsigned short role)
 #define FRAME_LEN 22
 INTERRUPT(UART0_Interrupt, 4)
 {
-/*
-
- static unsigned short idx = 0;
-    IE_ES0 = 0;   // disable UART interrupt
-
-    if (SCON0_RI == 1)
-    {
-        SCON0_RI = 0;                           // Clear interrupt flag
-        Byte = SBUF0;                      // Read a character from UART
-        if (idx == 0) {
-            if (Byte == FRAME_HEADER) {
-                UART_RX_buffer[idx++] = Byte;
-                crc16_init(0xFFFF);
-                crc16_add(Byte);
-            }
-        } else if (idx == 1) {
-            if (Byte == FRAME_HEADER) {
-                UART_RX_buffer[idx++] = Byte;
-                crc16_add(Byte);
-            } else
-                idx = 0;
-        } else if (idx >= 2 && idx < FRAME_CRC_S) {
-            UART_RX_buffer[idx++] = Byte;
-            crc16_add(Byte);
-        } else if (idx < FRAME_LEN && idx >= FRAME_CRC_S) {
-            UART_RX_buffer[idx++] = Byte;
-        }
-
-        if (idx == FRAME_LEN) {
-            if (crc16_msb() == UART_RX_buffer[FRAME_CRC_S] &&
-                   crc16_lsb() == UART_RX_buffer[FRAME_CRC_S + 1])
-               rx_frame_process(role);
-            idx = 0;
-        }
-    }
-
-    IE_ES0 = 1;   // enable UART interrupt
-*/
-	 static unsigned short idx = 0;
+	static unsigned short idx = 0;
+	IE_ES0 = 0;   // disable UART interrupt
 
 	if (SCON0_RI == 1)
 	   {
@@ -533,35 +496,7 @@ INTERRUPT(UART0_Interrupt, 4)
 	              }
 	   }
 
-	   if (SCON0_TI == 1)                   // Check if transmit flag is set
-	   {
-	      SCON0_TI = 0;                           // Clear interrupt flag
-
-	      if (UART_Buffer_Size != 1)         // If buffer not empty
-	      {
-	         // If a new word is being output
-	         if ( UART_Buffer_Size == UART_Input_First ) {
-	              UART_Output_First = 0;  }
-
-	         // Store a character in the variable byte
-	         Byte = UART_Buffer[UART_Output_First];
-
-	         if ((Byte >= 0x61) && (Byte <= 0x7A)) { // If upper case letter
-	            Byte -= 32; }
-
-	         SBUF0 = Byte;                   // Transmit to Hyperterminal
-
-	         UART_Output_First++;            // Update counter
-
-	         UART_Buffer_Size--;             // Decrease array size
-
-	      }
-	      else
-	      {
-	         UART_Buffer_Size = 0;            // Set the array size to 0
-	         TX_Ready = 1;                    // Indicate transmission complete
-	      }
-	   }
+    IE_ES0 = 1;   // enable UART interrupt
 }
 
 //-----------------------------------------------------------------------------
