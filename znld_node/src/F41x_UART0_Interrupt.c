@@ -69,6 +69,22 @@
 #define AUX			   P1_B7			// Descriptive name for P1.7
 #define FRAME_SRC_ID_S  2	// src address start index
 #define FRAME_DEST_ID_S 8	// dest address start index
+#define FRAME_SN 		14 // add define @2017-07-8 from eric
+#define RECV_SN (UART_RX_buffer[FRAME_SN])
+#define FRAME_TAG_S     15
+#define FRAME_VALUE_S   16
+#define FRAME_CRC_S     20
+#define RECV_TAG (UART_RX_buffer[FRAME_TAG_S])
+#define RECV_VALUE (& UART_RX_buffer[FRAME_VALUE_S])
+#define RECV_CRC (& UART_RX_buffer[FRAME_CRC_S])
+#define CMD_LAMP_ALL_OFF	0x00
+#define CMD_LAMP_LINE1_ON	0x01
+#define CMD_LAMP_LINE2_ON   0x02
+#define CMD_LAMP_ALL_ON		0x03
+#define CMD_X_IDX			0
+#define CMD_Y_IDX		    1
+#define CMD_Z_IDX			2
+
 
 
 //-----------------------------------------------------------------------------
@@ -80,6 +96,7 @@ void SYSCLK_Init (void);
 void UART0_Init (void);
 void PORT_Init (void);
 void Timer2_Init (S16);
+void rx_frame_process(unsigned short role);
 
 //-----------------------------------------------------------------------------
 // Global Variables
@@ -90,7 +107,7 @@ U8 UART_Buffer[UART_BUFFERSIZE];
 U8 UART_Buffer_Size = 0;
 U8 UART_Input_First = 0;
 U8 UART_Output_First = 0;
-U8 TX_Ready =1;
+U8 RX_Ready =0;
 static char Byte;
 
 //add code @2017-07-08 from eric S
@@ -99,6 +116,10 @@ unsigned char self_id[FRAME_ID_LEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x05};
 
 //#define FRAME_ID_LEN    6 //move up @2017-07-08 from eric S
 unsigned char UART_RX_buffer[UART_BUFFERSIZE];//add define @2017-07-08 from eric S
+
+unsigned short role; // 0: STA; 1: RELAY
+unsigned short sn; // frame sequence number
+
 
 //-----------------------------------------------------------------------------
 // MAIN Routine
@@ -119,10 +140,9 @@ void main (void)
    {
       // If the complete word has been entered via the terminal followed by
       // carriage return
-      if((TX_Ready == 1) && (UART_Buffer_Size != 0) && (Byte == '\r' || Byte == '\n'))
-      {
-         TX_Ready = 0;                 // Set the flag to zero
-         SCON0_TI = 1;                      // Set transmit flag to 1
+      if (RX_Ready == 1) {
+         RX_Ready = 0;                 // Set the flag to zero
+         rx_frame_process(role);
       }
    }
 }
@@ -164,8 +184,25 @@ void main (void)
 void PORT_Init (void)
 {
 	   P0MDOUT |= 0x10;                    // Enable UTX as push-pull output
-	   XBR0     = 0x01;                    // Enable UART on P0.4(TX) and P0.5(RX)
-	   XBR1     = 0x40;                    // Enable crossbar and weak pull-ups
+	   P2MDOUT 	= P2MDOUT_B0__PUSH_PULL | P2MDOUT_B1__PUSH_PULL;
+	   // Enable UART on P0.4(TX) and P0.5(RX)，I2C & SPI
+	   XBR0     = XBR0_URT0E__ENABLED | XBR0_SPI0E__ENABLED | XBR0_SMB0E__ENABLED;
+	   // Analog inputs pins should be skipped by the crossbar
+	   P0SKIP   = 0x03;
+	   P1SKIP   = P1SKIP_B0__SKIPPED | P1SKIP_B1__SKIPPED | P1SKIP_B2__NOT_SKIPPED
+	            | P1SKIP_B3__NOT_SKIPPED | P1SKIP_B4__NOT_SKIPPED | P1SKIP_B5__NOT_SKIPPED
+	            | P1SKIP_B6__NOT_SKIPPED | P1SKIP_B7__NOT_SKIPPED; // 0x03
+	   // Enable crossbar, weak pull-ups and CEX0/CEX1
+	   XBR1     = XBR1_XBARE__ENABLED | XBR1_WEAKPUD__PULL_UPS_ENABLED | XBR1_PCA0ME__CEX0_CEX1;
+	   REF0CN   = 0x18;
+	   PCA0CN   = 0x40;
+	   PCA0MD   = 0;
+	   PCA0CPM0 = 0x42;
+	   PCA0CPM1 = 0x42;
+	   PCA0CPL0 = 0;
+	   PCA0CPH0 = 0;
+	   PCA0CPL1 = 0;
+	   PCA0CPH1 = 0;
 	/*
    P0MDOUT 	= P0MDOUT_B0__PUSH_PULL | P0MDOUT_B1__PUSH_PULL | P0MDOUT_B2__PUSH_PULL
 		   	| P0MDOUT_B3__PUSH_PULL | P0MDOUT_B4__PUSH_PULL | P0MDOUT_B5__OPEN_DRAIN
@@ -249,7 +286,7 @@ void UART0_Init (void)
    TMOD &= ~0xf0;                      // TMOD: timer 1 in 8-bit autoreload
    TMOD |=  0x20;
    TCON_TR1 = 1;                       // START Timer1
-   TX_Ready = 1;                       // Flag showing that UART can transmit
+   RX_Ready = 0;                       // Flag showing that UART can transmit
    IP |= 0x10;						   // Make UART high priority
    IE_ES0 = 1;						   // Enable UART0 interrupts
 }
@@ -304,6 +341,32 @@ void do_poll_response()
 
 void do_lamp_ctrl_response()
 {
+	switch (RECV_VALUE[CMD_X_IDX]) {
+		case CMD_LAMP_ALL_ON:
+			P2 = (P2_B0__BMASK & P2_B0__LOW) | (P2_B1__BMASK & P2_B1__LOW); 	// low active
+			PCA0CPL0 = ~(RECV_VALUE[CMD_Y_IDX]);
+			PCA0CPH0 = ~(RECV_VALUE[CMD_Y_IDX]);
+			PCA0CPL1 = ~(RECV_VALUE[CMD_Z_IDX]);
+			PCA0CPH1 = ~(RECV_VALUE[CMD_Z_IDX]);
+			break;
+		case CMD_LAMP_ALL_OFF:
+			P2 = (P2_B0__BMASK & P2_B0__HIGH) | (P2_B1__BMASK & P2_B1__HIGH); 	// high in-active
+			PCA0CPL0 = ~(RECV_VALUE[CMD_Y_IDX]);
+			PCA0CPH0 = ~(RECV_VALUE[CMD_Y_IDX]);
+			PCA0CPL1 = ~(RECV_VALUE[CMD_Z_IDX]);
+			PCA0CPH1 = ~(RECV_VALUE[CMD_Z_IDX]);
+			break;
+		case CMD_LAMP_LINE1_ON:
+		case CMD_LAMP_LINE2_ON:
+			P2 = (P2_B0__BMASK & P2_B0__LOW) | (P2_B1__BMASK & P2_B1__LOW);
+			PCA0CPL0 = ~(RECV_VALUE[CMD_Y_IDX]);
+			PCA0CPH0 = ~(RECV_VALUE[CMD_Y_IDX]);
+			PCA0CPL1 = ~(RECV_VALUE[CMD_Z_IDX]);
+			PCA0CPH1 = ~(RECV_VALUE[CMD_Z_IDX]);
+			break;
+		default:
+			break;
+	}
 	return ;
 }
 
@@ -361,12 +424,6 @@ unsigned short random(unsigned short range)
     return value;
 }
 
-#define FRAME_TAG_S     15
-#define FRAME_VALUE_S   16
-#define FRAME_CRC_S     20
-#define RECV_TAG (UART_RX_buffer[FRAME_TAG_S])
-#define RECV_VALUE (& UART_RX_buffer[FRAME_VALUE_S])
-#define RECV_CRC (& UART_RX_buffer[FRAME_CRC_S])
 
 // Protocol TAG definitions
 #define PTAG_ACK        1
@@ -381,7 +438,7 @@ void rx_cmd_process(unsigned short isBroadcastFrame)
         case PTAG_POLL:
             do_poll_response();
             break;
-        case PTAG_LAMP_CTRL:
+        case PTAG_LAMP_CTRL:			// lamp open/close control
             do_lamp_ctrl_response();
             break;
         default:
@@ -401,11 +458,6 @@ void rx_cmd_process(unsigned short isBroadcastFrame)
 //-----------------------------------------------------------------------------
 
 //unsigned short self_id[6]; // move up @2017-07-08 from eric
-
-unsigned short role; // 0: STA; 1: RELAY
-unsigned short sn; // frame sequence number
-#define FRAME_SN 14 // add define @2017-07-8 from eric
-#define RECV_SN (UART_RX_buffer[FRAME_SN])
 void rx_frame_process(unsigned short role)
 {
     unsigned short isMyFrame = is_my_frame();
@@ -435,7 +487,6 @@ void rx_frame_process(unsigned short role)
                 send_frame();
             }
         }
-// del 1 '}'  @2017-07-08 from eric
 }
 
 
@@ -491,7 +542,7 @@ INTERRUPT(UART0_Interrupt, 4)
 	              if (idx == FRAME_LEN) {
 	                  if (crc16_msb() == UART_RX_buffer[FRAME_CRC_S] &&
 	                         crc16_lsb() == UART_RX_buffer[FRAME_CRC_S + 1])
-	                     rx_frame_process(role);
+	                     RX_Ready = 1;
 	                  idx = 0;
 	              }
 	   }
