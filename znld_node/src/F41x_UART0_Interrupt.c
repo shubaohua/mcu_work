@@ -101,6 +101,8 @@ void Timer2_Init (S16);
 void rx_frame_process(unsigned short role);
 void send_frame(void);
 unsigned char random(unsigned char range);
+void sleep(unsigned char seconds);
+
 
 //-----------------------------------------------------------------------------
 // Global Variables
