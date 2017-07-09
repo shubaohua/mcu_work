@@ -349,7 +349,7 @@ unsigned short crc16_lsb(void)
 //-----------------------------------------------------------------------------
 void do_nack_response()
 {
-	unsigned char send_back_frm_number = 0;
+	//unsigned char send_back_frm_number = 0;
 		unsigned char i;
 
 		poll_package[0] = PACKAGE_HEAD_BYTe_1;
@@ -474,11 +474,11 @@ void do_lamp_ctrl_response()
 void send_frame()
 {
 	unsigned char i = 0;
-	
 //	while (AUX & 1){
 //
 //}
 
+/*
 // send back frm hanlding
 	if ((flag_send_bck_frm_ready == 1) && (AUX == 1)){
 		for (i=0; i<22; i++){
@@ -503,7 +503,7 @@ void send_frame()
 		}	
 		flag_send_repeat_frm_ready = 0;	// send repeat message already so clear the flag
 	}
-
+*/
 	return;
 }
 
@@ -557,7 +557,8 @@ void sleep(unsigned short seconds)
 			k = i;
 		}
 	}
-	
+
+	return;
 }
 
 // return a random value in [0, range], note range is included.
