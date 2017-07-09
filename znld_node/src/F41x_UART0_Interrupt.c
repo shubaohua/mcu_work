@@ -109,7 +109,7 @@ U8 UART_Buffer[UART_BUFFERSIZE];
 U8 UART_Buffer_Size = 0;
 U8 UART_Input_First = 0;
 U8 UART_Output_First = 0;
-U8 RX_Ready =0;
+U8 RX_Ready =0; // 0: no receive frm ready in UART_RX_buffer or. no need to do process; 1: need to do receive frm process
 static char Byte;
 
 //add code @2017-07-08 from eric S
@@ -118,14 +118,18 @@ unsigned char self_id[FRAME_ID_LEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x05};
 unsigned char source_id[FRAME_ID_LEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
 #define PACKAGE_HEAD_BYTe_1		0x55
 #define PACKAGE_HEAD_BYTe_2		0x55
-unsigned char poll_package[UART_BUFFERSIZE];
+unsigned char poll_package[UART_BUFFERSIZE]; // send back package buffer
+unsigned char repeator_package[UART_BUFFERSIZE]; // repeator pckage buffer
 
 //#define FRAME_ID_LEN    6 //move up @2017-07-08 from eric S
 unsigned char UART_RX_buffer[UART_BUFFERSIZE];//add define @2017-07-08 from eric S
 
-unsigned short role; // 0: STA; 1: RELAY
+unsigned short role; //0: that is normal node; 1: that is repeator ndoe;  0: STA; 1: RELAY
 unsigned short sn; // frame sequence number
 
+//unsigned char flag_receive_frm_ready; // 0: no receive frm ready in UART_RX_buffer or. no need to do process; 1: need to do receive frm process
+unsigned char flag_send_bck_frm_ready; // 0: no need send message to source destination; 1: need to send message to source destination
+unsigned char flag_send_repeat_frm_ready; //0: no need send reapeat frm; 1: need to send repeat frm
 
 //-----------------------------------------------------------------------------
 // MAIN Routine
@@ -140,6 +144,11 @@ void main (void)
    PORT_Init();                        // Initialize Port I/O
    UART0_Init();
 
+	//initialize flag
+   //flag_receive_frm_ready = 0;
+   flag_send_bck_frm_ready = 0;
+   flag_send_repeat_frm_ready = 0;
+
    IE_EA = 1;
 
    while(1)
@@ -147,9 +156,12 @@ void main (void)
       // If the complete word has been entered via the terminal followed by
       // carriage return
       if (RX_Ready == 1) {
-         RX_Ready = 0;                 // Set the flag to zero
+         RX_Ready = 0;                 // Set the flag to zero, means complete all cmd processing
          rx_frame_process(role);
       }
+
+	  send_frame();		// handling send message involving send back & repeat frm together
+	  
    }
 }
 
@@ -462,23 +474,47 @@ void do_lamp_ctrl_response()
 void send_frame()
 {
 	unsigned char i = 0;
-	while (AUX & 1){
+	
+//	while (AUX & 1){
+//
+//}
 
+// send back frm hanlding
+	if ((flag_send_bck_frm_ready == 1) && (AUX == 1)){
+		for (i=0; i<22; i++){
+		SBUF0 = poll_package[i];
+			while (SCON0_TI != 1){
+
+			}
+		SCON0_TI = 0;
+		}	
+		flag_send_bck_frm_ready = 0;	// send back message already so clear the flag
 	}
 
-	for (i=0; i<22; i++){
-	SBUF0 = poll_package[i];
-		while (SCON0_TI != 1){
+// repeat frm handling
+	if ((flag_send_repeat_frm_ready== 1) && (AUX == 1)){
+		sleep(random(sn));		// waiting random second then send out to avoid broadcast storm
+		for (i=0; i<22; i++){
+		SBUF0 = repeator_package[i];
+			while (SCON0_TI != 1){
 
-		}
-	SCON0_TI = 0;
+			}
+		SCON0_TI = 0;
+		}	
+		flag_send_repeat_frm_ready = 0;	// send repeat message already so clear the flag
 	}
+
 	return;
 }
 
 // duplicate UART_RX_buffer into UART_TX_buffer
 void forward_preparation()
 {
+	unsigned char i = 0;
+	for (i=0; i<22; i++){
+		repeator_package[i] = UART_RX_buffer[i];
+	}
+
 }
 
 //-----------------------------------------------------------------------------
@@ -510,12 +546,23 @@ unsigned short is_broadcast_frame()
 
 void sleep(unsigned short seconds)
 {
+	// temp try using for cycle, will use timer in finial code
+	unsigned char i = 0;
+	unsigned long j = 0;
+	unsigned char k = 0 ;
+	for (i=0; i<seconds; i++){
+		for (j=0; j<1000;j++){	// assume 1000 cycle equal 1 second, just for test
+			k = i;
+		}
+	}
+	
 }
 
 // return a random value in [0, range], note range is included.
-unsigned short random(unsigned short range)
+unsigned char random(unsigned char range)
 {
-    unsigned short value = 0;
+    unsigned char value = 0;
+	value = range & 0x03;
     return value;
 }
 
@@ -532,13 +579,15 @@ void rx_cmd_process(unsigned short isBroadcastFrame)
         // all *_resonse() below need to fill in UART_TX_buffer
         case PTAG_POLL:
             do_poll_response();			// poll package ready
-            send_frame();
+            flag_send_bck_frm_ready = 1;
+            //send_frame();
             break;
         case PTAG_LAMP_CTRL:			// lamp open/close control
             do_lamp_ctrl_response();
             if (!isBroadcastFrame){
             	 do_poll_response();
-            	 send_frame();
+            	 //send_frame();
+            	 flag_send_bck_frm_ready = 1;
             }
             break;
         default:
@@ -575,16 +624,18 @@ void rx_frame_process(unsigned short role)
 
     // RELAY specific things
     if (role == 1)
-        if (isBroadcastFrame && need_forward) { // change isBroadcastFrame() to isBroadcastFrame @2017-07-08 from eric s
-            sleep(random(3));
-            forward_preparation();
-            send_frame();
-        } else if (!isMyFrame) {
+        if (isBroadcastFrame && need_forward) { // change isBroadcastFrame() to isBroadcastFrame @2017-07-08 from eric s -- handling broadcast frm
+            //sleep(random(sn));
+            forward_preparation(); // prepare repeat  frm package
+            flag_send_repeat_frm_ready = 1;
+            //send_frame();
+        } else if (!isMyFrame) {	// hanlding single node frm
             if (RECV_SN > sn || (RECV_SN == 0 && sn != 0)) {
                 sn = RECV_SN;
-                sleep(1 + random(3));
-                forward_preparation();
-                send_frame();
+                //sleep(1 + random(sn));
+                forward_preparation();	// only prepare package buffer for repeator
+                //send_frame();
+            	flag_send_repeat_frm_ready = 1;
             }
         }
 }
