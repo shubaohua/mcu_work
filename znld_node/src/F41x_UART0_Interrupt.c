@@ -99,6 +99,7 @@ void UART0_Init (void);
 void PORT_Init (void);
 void Timer2_Init (S16);
 void rx_frame_process(unsigned short role);
+void send_frame(void);
 
 //-----------------------------------------------------------------------------
 // Global Variables
@@ -124,8 +125,8 @@ unsigned char repeator_package[UART_BUFFERSIZE]; // repeator pckage buffer
 //#define FRAME_ID_LEN    6 //move up @2017-07-08 from eric S
 unsigned char UART_RX_buffer[UART_BUFFERSIZE];//add define @2017-07-08 from eric S
 
-unsigned short role; //0: that is normal node; 1: that is repeator ndoe;  0: STA; 1: RELAY
-unsigned short sn; // frame sequence number
+unsigned char role; //0: that is normal node; 1: that is repeator ndoe;  0: STA; 1: RELAY
+unsigned char sn; // frame sequence number
 
 //unsigned char flag_receive_frm_ready; // 0: no receive frm ready in UART_RX_buffer or. no need to do process; 1: need to do receive frm process
 unsigned char flag_send_bck_frm_ready; // 0: no need send message to source destination; 1: need to send message to source destination
@@ -347,7 +348,7 @@ unsigned short crc16_lsb(void)
 //-----------------------------------------------------------------------------
 // process related add some function defien here @2017-07-08 from Eric S
 //-----------------------------------------------------------------------------
-void do_nack_response()
+void do_nack_response(void)
 {
 	//unsigned char send_back_frm_number = 0;
 		unsigned char i;
@@ -390,7 +391,7 @@ void do_nack_response()
 	return ;
 }
 
-void do_poll_response()
+void do_poll_response(void)
 {
 	unsigned char send_back_frm_number = 0;
 	unsigned char i;
@@ -471,14 +472,14 @@ void do_lamp_ctrl_response()
 //-----------------------------------------------------------------------------
 
 // send UART_TX_buffer to UART byte by byte
-void send_frame()
+void send_frame(void)
 {
 	unsigned char i = 0;
 //	while (AUX & 1){
 //
 //}
 
-/*
+
 // send back frm hanlding
 	if ((flag_send_bck_frm_ready == 1) && (AUX == 1)){
 		for (i=0; i<22; i++){
@@ -503,7 +504,6 @@ void send_frame()
 		}	
 		flag_send_repeat_frm_ready = 0;	// send repeat message already so clear the flag
 	}
-*/
 	return;
 }
 
@@ -550,10 +550,10 @@ void sleep(unsigned short seconds)
 {
 	// temp try using for cycle, will use timer in finial code
 	unsigned char i = 0;
-	unsigned long j = 0;
+	unsigned char j = 0;
 	unsigned char k = 0 ;
 	for (i=0; i<seconds; i++){
-		for (j=0; j<1000;j++){	// assume 1000 cycle equal 1 second, just for test
+		for (j=0; j<256;j++){	// assume 1000 cycle equal 1 second, just for test
 			k = i;
 		}
 	}
