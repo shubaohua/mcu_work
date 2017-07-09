@@ -100,6 +100,7 @@ void PORT_Init (void);
 void Timer2_Init (S16);
 void rx_frame_process(unsigned short role);
 void send_frame(void);
+unsigned char random(unsigned char range);
 
 //-----------------------------------------------------------------------------
 // Global Variables
@@ -466,6 +467,13 @@ void do_lamp_ctrl_response()
 	return ;
 }
 
+unsigned char random(unsigned char range)
+{
+    unsigned char value = 0;
+	value = range & 0x03;
+    return value;
+}
+
 
 //-----------------------------------------------------------------------------
 // TX Routines
@@ -562,12 +570,6 @@ void sleep(unsigned char seconds)
 }
 
 // return a random value in [0, range], note range is included.
-unsigned char random(unsigned char range)
-{
-    unsigned char value = 0;
-	value = range & 0x03;
-    return value;
-}
 
 
 // Protocol TAG definitions
