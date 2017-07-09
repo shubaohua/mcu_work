@@ -515,6 +515,8 @@ void forward_preparation()
 		repeator_package[i] = UART_RX_buffer[i];
 	}
 
+	return;
+
 }
 
 //-----------------------------------------------------------------------------
