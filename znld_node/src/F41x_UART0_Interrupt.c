@@ -546,7 +546,7 @@ unsigned short is_broadcast_frame()
     return result;
 }
 
-void sleep(unsigned short seconds)
+void sleep(unsigned char seconds)
 {
 	// temp try using for cycle, will use timer in finial code
 	unsigned char i = 0;
