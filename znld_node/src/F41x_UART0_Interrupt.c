@@ -455,6 +455,7 @@ void send_frame()
 
 // repeat frm handling
 	if ((flag_send_repeat_frm_ready== 1) && (AUX == 1)){
+		sleep(random(sn));		// waiting random second then send out to avoid broadcast storm
 		for (i=0; i<22; i++){
 		SBUF0 = repeator_package[i];
 			while (SCON0_TI != 1){
@@ -586,14 +587,14 @@ void rx_frame_process(unsigned short role)
     // RELAY specific things
     if (role == 1)
         if (isBroadcastFrame && need_forward) { // change isBroadcastFrame() to isBroadcastFrame @2017-07-08 from eric s -- handling broadcast frm
-            sleep(random(sn));
+            //sleep(random(sn));
             forward_preparation(); // prepare repeat  frm package
             flag_send_repeat_frm_ready = 1;
             //send_frame();
         } else if (!isMyFrame) {	// hanlding single node frm
             if (RECV_SN > sn || (RECV_SN == 0 && sn != 0)) {
                 sn = RECV_SN;
-                sleep(1 + random(sn));
+                //sleep(1 + random(sn));
                 forward_preparation();	// only prepare package buffer for repeator
                 //send_frame();
             	flag_send_repeat_frm_ready = 1;
