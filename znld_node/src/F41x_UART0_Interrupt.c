@@ -106,7 +106,7 @@ void send_frame(void);
 //-----------------------------------------------------------------------------
 
 #define UART_BUFFERSIZE 22
-U8 UART_Buffer[UART_BUFFERSIZE];
+//U8 UART_Buffer[UART_BUFFERSIZE]; // no using so -->
 U8 UART_Buffer_Size = 0;
 U8 UART_Input_First = 0;
 U8 UART_Output_First = 0;
@@ -550,10 +550,10 @@ void sleep(unsigned short seconds)
 {
 	// temp try using for cycle, will use timer in finial code
 	unsigned char i = 0;
-	unsigned char j = 0;
+	unsigned long j = 0;
 	unsigned char k = 0 ;
 	for (i=0; i<seconds; i++){
-		for (j=0; j<256;j++){	// assume 1000 cycle equal 1 second, just for test
+		for (j=0; j<1000;j++){	// assume 1000 cycle equal 1 second, just for test
 			k = i;
 		}
 	}
