@@ -15,7 +15,7 @@
  * @author  Hongbo Lu (lu7120bobo)
  * @version 1.0
  * @date    2017-07-10
- * @bug     No known bugs.
+ * @bug     AUX not functional.
  *
  * Revision history:
  * $Log:$
@@ -24,7 +24,7 @@
 
 #include <SI_C8051F410_Register_Enums.h>
 #include <stdio.h>
-#include <stdlib.h>			// for rand() usage
+#include <stdlib.h>         // for rand() usage
 
 
 #define SYSCLK              24500000    ///< SYSCLK frequency in Hz
@@ -96,7 +96,7 @@ void main (void)
 {
   PCA0MD &= ~0x40;                    // WDTE = 0 (clear watchdog timer enable)
 
-  SYSCLK_Init ();                     // Initialize Oscillator
+  SYSCLK_Init();                      // Initialize Oscillator
   PORT_Init();                        // Initialize Port I/O
   UART0_Init();
 
@@ -107,13 +107,13 @@ void main (void)
 
   IE_EA = 1;
 
-  while(1)
+  while (1)
   {
     // If the complete word has been entered via the terminal followed by
     // carriage return
     if (RX_Ready == 1) {
       RX_Ready = 0;                   // Set the flag to zero, means complete all cmd processing
-      rx_frame_process(1);
+      rx_frame_process(role);
     }
 
     send_frame();  // handling send message involving send back & repeat frm together
@@ -177,29 +177,8 @@ void PORT_Init (void)
   PCA0CPH0 = 0;
   PCA0CPL1 = 0;
   PCA0CPH1 = 0;
-  /*
-     P0MDOUT  = P0MDOUT_B0__PUSH_PULL | P0MDOUT_B1__PUSH_PULL | P0MDOUT_B2__PUSH_PULL
-     | P0MDOUT_B3__PUSH_PULL | P0MDOUT_B4__PUSH_PULL | P0MDOUT_B5__OPEN_DRAIN
-     | P0MDOUT_B6__PUSH_PULL | P0MDOUT_B7__PUSH_PULL;
-     P1MDIN   = P1MDIN_B0__ANALOG  | P1MDIN_B1__ANALOG  | P1MDIN_B2__DIGITAL
-     | P1MDIN_B3__DIGITAL | P1MDIN_B4__DIGITAL | P1MDIN_B5__DIGITAL
-     | P1MDIN_B6__DIGITAL | P1MDIN_B7__DIGITAL;
-     P1MDOUT  = P1MDOUT_B0__OPEN_DRAIN | P1MDOUT_B1__OPEN_DRAIN | P1MDOUT_B2__OPEN_DRAIN
-     | P1MDOUT_B3__OPEN_DRAIN | P1MDOUT_B4__PUSH_PULL  | P1MDOUT_B5__PUSH_PULL
-     | P1MDOUT_B6__PUSH_PULL  | P1MDOUT_B7__OPEN_DRAIN;
-  // Analog inputs pins should be skipped by the crossbar
-  P1SKIP   = P1SKIP_B0__SKIPPED | P1SKIP_B1__SKIPPED | P1SKIP_B2__NOT_SKIPPED
-  | P1SKIP_B3__NOT_SKIPPED | P1SKIP_B4__NOT_SKIPPED | P1SKIP_B5__NOT_SKIPPED
-  | P1SKIP_B6__NOT_SKIPPED | P1SKIP_B7__NOT_SKIPPED;
-  P2MDOUT  = P2MDOUT_B0__PUSH_PULL | P2MDOUT_B1__PUSH_PULL;
-
-  // Enable UART on P0.4(TX) and P0.5(RX)，I2C & SPI
-  XBR0     = XBR0_URT0E__ENABLED | XBR0_SPI0E__ENABLED | XBR0_SMB0E__ENABLED;
-
-  // Enable crossbar, weak pull-ups and CEX0/CEX1
-  XBR1     = XBR1_XBARE__ENABLED | XBR1_WEAKPUD__PULL_UPS_ENABLED | XBR1_PCA0ME__CEX0_CEX1;
-  */
 }
+
 
 //-----------------------------------------------------------------------------
 // SYSCLK_Init
@@ -229,7 +208,6 @@ void SYSCLK_Init (void)
 //
 // Configure the UART0 using Timer1, for <BAUDRATE> and 8-N-1.
 //-----------------------------------------------------------------------------
-
 
 void UART0_Init (void)
 {
@@ -421,13 +399,18 @@ void do_lamp_ctrl_response()
   return ;
 }
 
+
+/**
+ * @brief random number generation in range
+ *
+ * @param range [0 ~ 256)
+ * @return a random value in [0, range], note range is included
+ */
 unsigned char random(unsigned char range)
 {
-  static short seed = 0;
   unsigned char value;
 
-//  srand(seed++);
-  value = rand() / ( 32768 / (range+1) );
+  value = rand() / ( 32768 / ( range + 1 ) );
 
   return value;
 }
@@ -460,7 +443,7 @@ void send_frame(void)
 
   // repeat frm handling
   if ((flag_send_repeat_frm_ready== 1) && (AUX == 1)){
-    sleep(random(3));  // waiting random second then send out to avoid broadcast storm
+    sleep(random(10));  // waiting random second then send out to avoid broadcast storm
     for (i=0; i<22; i++){
       SBUF0 = repeator_package[i];
       while (SCON0_TI != 1){
@@ -512,22 +495,33 @@ unsigned short is_broadcast_frame()
   return result;
 }
 
+
+/**
+ * @brief sleep/delay certain seconds
+ *
+ * The amount of time it takes for a single NOP on the target (24.5MHz) is about
+ * 0.5 us, so use NOP with 2M times for one section delay or sleep.
+ *
+ * @param seconds
+ * @return void
+ */
 void sleep(unsigned char seconds)
 {
   // temp try using for cycle, will use timer in finial code
   unsigned char i = 0;
-  unsigned long j = 0;
-  unsigned char k = 0 ;
-  for (i=0; i<seconds; i++){
-    for (j=0; j<1000;j++){ // assume 1000 cycle equal 1 second, just for test
-      k = i;
+  unsigned int j = 0;
+  unsigned int k = 0;
+
+  for (i=0; i<seconds; i++) {
+    for (j=0; j<2000;j++) {
+      for (k=0; k<1000; k++) {
+        _nop_ ();
+      }
     }
   }
 
   return;
 }
-
-// return a random value in [0, range], note range is included.
 
 
 // Protocol TAG definitions
