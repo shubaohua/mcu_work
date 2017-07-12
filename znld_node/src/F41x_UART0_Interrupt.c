@@ -14,8 +14,8 @@
  * @author  Eric Shu (shubaohua)
  * @author  Hongbo Lu (lu7120bobo)
  * @version 1.0
- * @date    2017-07-10
- * @bug     AUX not functional.
+ * @date    2017-07-12
+ * @bug     no bug
  *
  * Revision history:
  * $Log:$
@@ -65,6 +65,8 @@ void rx_frame_process(unsigned short role);
 void send_frame(void);
 U8 random(unsigned char range);
 void sleep(unsigned char seconds);
+unsigned short is_broadcast_frame();
+
 
 
 //U8 UART_Buffer[UART_BUFFERSIZE]; // no using so -->
