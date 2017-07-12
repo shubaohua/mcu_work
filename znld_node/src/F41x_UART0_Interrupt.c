@@ -50,9 +50,6 @@
 #define CMD_LAMP_LINE1_ON   0x01
 #define CMD_LAMP_LINE2_ON   0x02
 #define CMD_LAMP_ALL_ON     0x03
-#define CMD_X_IDX           0
-#define CMD_Y_IDX           1
-#define CMD_Z_IDX           2
 #define UART_BUFFERSIZE     FRAME_LEN
 #define FRAME_ID_LEN        6
 #define PACKAGE_HEAD_BYTe_1 0x55
@@ -76,7 +73,7 @@ void PORT_Init (void);
 void Timer2_Init (S16);
 void rx_frame_process(unsigned char role);
 void send_frame(void);
-U8 random(unsigned char range);
+unsigned char random(unsigned char range);
 void sleep(unsigned char seconds);
 
 ///////////////  NEED MODIFICATION HERE FOR DIFFERENT NODES /////////
@@ -84,11 +81,10 @@ unsigned char role = 0; //0: that is normal node; 1: that is repeator ndoe;  0: 
 unsigned char self_id[FRAME_ID_LEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x05};
 /////////////////////////////////////////////////////////////////////
 
-U8 lamp_cmd_x = 0;
-U8 lamp_cmd_y = 0;
-U8 lamp_cmd_z = 0;
+U8 recv_tag, recv_value[4], recv_src_id[6];
 U8 RX_Ready =0; // 0: no receive frm ready in UART_RX_Buffer or. no need to do process; 1: need to do receive frm process
 unsigned char sn = 0; // frame sequence number
+
 
 unsigned char UART_RX_Buffer[UART_BUFFERSIZE];
 unsigned char UART_TX_Buffer[UART_BUFFERSIZE];
@@ -112,7 +108,6 @@ void main (void)
     {
         if (RX_Ready == 1) {
             rx_frame_process(role);
-            RX_Ready = 0;                   // Set the flag to zero, means complete all cmd processing
         }
     }
 }
@@ -282,14 +277,14 @@ void do_nack_response(void)
     UART_TX_Buffer[6] = self_id[4];
     UART_TX_Buffer[7] = self_id[5];
 
-    UART_TX_Buffer[8] =  RECV_SRC_ID[0];
-    UART_TX_Buffer[9] =  RECV_SRC_ID[1];
-    UART_TX_Buffer[10] =  RECV_SRC_ID[2];
-    UART_TX_Buffer[11] =  RECV_SRC_ID[3];
-    UART_TX_Buffer[12] =  RECV_SRC_ID[4];
-    UART_TX_Buffer[13] =  RECV_SRC_ID[5];
+    UART_TX_Buffer[8] =  recv_src_id[0];
+    UART_TX_Buffer[9] =  recv_src_id[1];
+    UART_TX_Buffer[10] =  recv_src_id[2];
+    UART_TX_Buffer[11] =  recv_src_id[3];
+    UART_TX_Buffer[12] =  recv_src_id[4];
+    UART_TX_Buffer[13] =  recv_src_id[5];
 
-    UART_TX_Buffer[14] =  RECV_SN + 1; // frame number add 1
+    UART_TX_Buffer[14] =  sn + 1; // frame number add 1
 
     UART_TX_Buffer[15] =  PTAG_NACK;  // response tag number
 
@@ -329,21 +324,21 @@ void do_poll_response(void)
     UART_TX_Buffer[6] = self_id[4];
     UART_TX_Buffer[7] = self_id[5];
 
-    UART_TX_Buffer[8] =  RECV_SRC_ID[0];
-    UART_TX_Buffer[9] =  RECV_SRC_ID[1];
-    UART_TX_Buffer[10] =  RECV_SRC_ID[2];
-    UART_TX_Buffer[11] =  RECV_SRC_ID[3];
-    UART_TX_Buffer[12] =  RECV_SRC_ID[4];
-    UART_TX_Buffer[13] =  RECV_SRC_ID[5];
+    UART_TX_Buffer[8] =  recv_src_id[0];
+    UART_TX_Buffer[9] =  recv_src_id[1];
+    UART_TX_Buffer[10] =  recv_src_id[2];
+    UART_TX_Buffer[11] =  recv_src_id[3];
+    UART_TX_Buffer[12] =  recv_src_id[4];
+    UART_TX_Buffer[13] =  recv_src_id[5];
 
-    UART_TX_Buffer[14] =  RECV_SN + 1; // frame number add 1
+    UART_TX_Buffer[14] =  sn + 1; // frame number add 1
 
     UART_TX_Buffer[15] =  PTAG_POLL_ACK;  // response tag number
 
-    UART_TX_Buffer[16] =  lamp_cmd_x;
-    UART_TX_Buffer[17] =  lamp_cmd_y;
-    UART_TX_Buffer[18] =  lamp_cmd_z;
-    UART_TX_Buffer[19] =  0x00;
+    UART_TX_Buffer[16] =  recv_value[0];
+    UART_TX_Buffer[17] =  recv_value[1];
+    UART_TX_Buffer[18] =  recv_value[2];
+    UART_TX_Buffer[19] =  recv_value[3];
 
 #if 0
     CRC0CN = 0x1d;   // CRC initial valve 0xFF and enable
@@ -363,32 +358,28 @@ void do_poll_response(void)
 
 void do_lamp_ctrl_response()
 {
-    lamp_cmd_x = RECV_VALUE[CMD_X_IDX];
-    lamp_cmd_y = RECV_VALUE[CMD_Y_IDX];
-    lamp_cmd_x = RECV_VALUE[CMD_Z_IDX];
-
-    switch (lamp_cmd_x) {
+    switch (recv_value[0]) {
         case CMD_LAMP_ALL_ON:
             P2 = (P2_B0__BMASK & P2_B0__LOW) | (P2_B1__BMASK & P2_B1__LOW);  // low active
-            PCA0CPL0 = ~(lamp_cmd_y);
-            PCA0CPH0 = ~(lamp_cmd_y);
-            PCA0CPL1 = ~(lamp_cmd_z);
-            PCA0CPH1 = ~(lamp_cmd_z);
+            PCA0CPL0 = ~(recv_value[1]);
+            PCA0CPH0 = ~(recv_value[1]);
+            PCA0CPL1 = ~(recv_value[2]);
+            PCA0CPH1 = ~(recv_value[2]);
             break;
         case CMD_LAMP_ALL_OFF:
             P2 = (P2_B0__BMASK & P2_B0__HIGH) | (P2_B1__BMASK & P2_B1__HIGH);  // high in-active
-            PCA0CPL0 = ~(lamp_cmd_y);
-            PCA0CPH0 = ~(lamp_cmd_y);
-            PCA0CPL1 = ~(lamp_cmd_z);
-            PCA0CPH1 = ~(lamp_cmd_z);
+            PCA0CPL0 = ~(recv_value[1]);
+            PCA0CPH0 = ~(recv_value[1]);
+            PCA0CPL1 = ~(recv_value[2]);
+            PCA0CPH1 = ~(recv_value[2]);
             break;
         case CMD_LAMP_LINE1_ON:
         case CMD_LAMP_LINE2_ON:
             P2 = (P2_B0__BMASK & P2_B0__LOW) | (P2_B1__BMASK & P2_B1__LOW);
-            PCA0CPL0 = ~(lamp_cmd_y);
-            PCA0CPH0 = ~(lamp_cmd_y);
-            PCA0CPL1 = ~(lamp_cmd_z);
-            PCA0CPH1 = ~(lamp_cmd_z);
+            PCA0CPL0 = ~(recv_value[1]);
+            PCA0CPH0 = ~(recv_value[1]);
+            PCA0CPL1 = ~(recv_value[2]);
+            PCA0CPH1 = ~(recv_value[2]);
             break;
         default:
             break;
@@ -497,7 +488,7 @@ void sleep(unsigned char seconds)
 
 void rx_cmd_process(unsigned char isBroadcastFrame)
 {
-    switch (RECV_TAG) {     // CMD tag
+    switch (recv_tag) {     // CMD tag
         // all *_resonse() below need to fill in UART_TX_Buffer
         case PTAG_POLL:
             do_poll_response();   // poll package ready
@@ -537,8 +528,20 @@ void rx_frame_process(unsigned char role)
     // common cmd process for STA & RELAY
     if (isMyFrame || isBroadcastFrame) {
         if (RECV_SN > sn || (RECV_SN == 0 && sn != 0)) {
-            sn = RECV_SN;
             need_forward = 1;
+            sn = RECV_SN;
+            recv_src_id[0] = RECV_SRC_ID[0];
+            recv_src_id[1] = RECV_SRC_ID[1];
+            recv_src_id[2] = RECV_SRC_ID[2];
+            recv_src_id[3] = RECV_SRC_ID[3];
+            recv_src_id[4] = RECV_SRC_ID[4];
+            recv_src_id[5] = RECV_SRC_ID[5];
+            recv_tag = RECV_TAG;
+            recv_value[0] = RECV_VALUE[0];
+            recv_value[1] = RECV_VALUE[1];
+            recv_value[2] = RECV_VALUE[2];
+            recv_value[3] = RECV_VALUE[3];
+            RX_Ready = 0;
             rx_cmd_process(isBroadcastFrame);
         }
     }
@@ -546,14 +549,16 @@ void rx_frame_process(unsigned char role)
     // RELAY specific things
     if (role == 1)
         if (isBroadcastFrame && need_forward) { 
-            sleep(random(RELAY_RANDOM_DELAY_MAX));
             forward_preparation(); // prepare repeat  frm package
+            RX_Ready = 0;
+            sleep(random(RELAY_RANDOM_DELAY_MAX));
             send_frame();
         } else if (!isMyFrame) { // hanlding single node frm
             if (RECV_SN > sn || (RECV_SN == 0 && sn != 0)) {
                 sn = RECV_SN;
-                sleep(RELAY_FIXED_DELAY + random(RELAY_RANDOM_DELAY_MAX));
                 forward_preparation(); // only prepare package buffer for repeator
+                RX_Ready = 0;
+                sleep(RELAY_FIXED_DELAY + random(RELAY_RANDOM_DELAY_MAX));
                 send_frame();
             }
         }
