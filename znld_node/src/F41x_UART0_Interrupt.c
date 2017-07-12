@@ -37,15 +37,15 @@
 #define FRAME_SRC_ID_S      2           ///< src address start index
 #define FRAME_DEST_ID_S     8           ///< dest address start index
 #define FRAME_SN            14      
-#define RECV_SN             (UART_RX_buffer[FRAME_SN])
+#define RECV_SN             (UART_RX_Buffer[FRAME_SN])
 #define FRAME_TAG_S         15
 #define FRAME_VALUE_S       16
 #define FRAME_CRC_S         20
-#define RECV_TAG            (UART_RX_buffer[FRAME_TAG_S])
-#define RECV_VALUE          (& UART_RX_buffer[FRAME_VALUE_S])
-#define RECV_CRC            (& UART_RX_buffer[FRAME_CRC_S])
-#define RECV_SRC_ID         (& UART_RX_buffer[FRAME_SRC_ID_S])
-#define RECV_DEST_ID        (& UART_RX_buffer[FRAME_DEST_ID_S])
+#define RECV_TAG            (UART_RX_Buffer[FRAME_TAG_S])
+#define RECV_VALUE          (& UART_RX_Buffer[FRAME_VALUE_S])
+#define RECV_CRC            (& UART_RX_Buffer[FRAME_CRC_S])
+#define RECV_SRC_ID         (& UART_RX_Buffer[FRAME_SRC_ID_S])
+#define RECV_DEST_ID        (& UART_RX_Buffer[FRAME_DEST_ID_S])
 #define CMD_LAMP_ALL_OFF    0x00
 #define CMD_LAMP_LINE1_ON   0x01
 #define CMD_LAMP_LINE2_ON   0x02
@@ -59,6 +59,13 @@
 #define PACKAGE_HEAD_BYTe_2 0x55
 #define RELAY_RANDOM_DELAY_MAX 3
 #define RELAY_FIXED_DELAY      1
+
+// Protocol TAG definitions
+#define PTAG_ACK            1
+#define PTAG_NACK           2
+#define PTAG_POLL           3
+#define PTAG_POLL_ACK       4
+#define PTAG_LAMP_CTRL      5
 
 
 INTERRUPT_PROTO(UART0_Interrupt, 4);
@@ -79,12 +86,12 @@ unsigned char self_id[FRAME_ID_LEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x05};
 
 U8 lamp_cmd_x = 0;
 U8 lamp_cmd_y = 0;
-U8 lamp_cmd_x = 0;
-U8 RX_Ready =0; // 0: no receive frm ready in UART_RX_buffer or. no need to do process; 1: need to do receive frm process
+U8 lamp_cmd_z = 0;
+U8 RX_Ready =0; // 0: no receive frm ready in UART_RX_Buffer or. no need to do process; 1: need to do receive frm process
 unsigned char sn = 0; // frame sequence number
 
-unsigned char UART_RX_buffer[UART_BUFFERSIZE];
-unsigned char UART_TX_buffer[UART_BUFFERSIZE];
+unsigned char UART_RX_Buffer[UART_BUFFERSIZE];
+unsigned char UART_TX_Buffer[UART_BUFFERSIZE];
 
 /**
  * @brief Main loop
@@ -242,7 +249,7 @@ void crc16_init()
 
 void crc16_add(unsigned char byte)
 {
-    CRC0IN = byte
+    CRC0IN = byte;
 }
 
 unsigned char crc16_msb(void)
@@ -409,7 +416,7 @@ unsigned char random(unsigned char range)
 // TX Routines
 //-----------------------------------------------------------------------------
 
-// send UART_TX_buffer to UART byte by byte
+// send UART_TX_Buffer to UART byte by byte
 void send_frame(void)
 {
     unsigned char i = 0;
@@ -417,19 +424,19 @@ void send_frame(void)
     while (AUX); // waiting for E32 ready before TX
 
     for (i=0; i<FRAME_LEN; i++){
-        SBUF0 = UART_TX_buffer[i];
+        SBUF0 = UART_TX_Buffer[i];
         while (SCON0_TI != 1);
         SCON0_TI = 0;
     } 
 }
 
-// duplicate UART_RX_buffer into UART_TX_buffer
+// duplicate UART_RX_Buffer into UART_TX_Buffer
 void forward_preparation()
 {
     unsigned char i = 0;
 
     for (i=0; i<FRAME_LEN; i++){
-        UART_TX_buffer[i] = UART_RX_buffer[i];
+        UART_TX_Buffer[i] = UART_RX_Buffer[i];
     }
 }
 
@@ -488,16 +495,10 @@ void sleep(unsigned char seconds)
 }
 
 
-// Protocol TAG definitions
-#define PTAG_ACK        1
-#define PTAG_NACK       2
-#define PTAG_POLL       3
-#define PTAG_POLL_ACK   4
-#define PTAG_LAMP_CTRL  5
 void rx_cmd_process(unsigned char isBroadcastFrame)
 {
     switch (RECV_TAG) {     // CMD tag
-        // all *_resonse() below need to fill in UART_TX_buffer
+        // all *_resonse() below need to fill in UART_TX_Buffer
         case PTAG_POLL:
             do_poll_response();   // poll package ready
             send_frame();
@@ -520,7 +521,7 @@ void rx_cmd_process(unsigned char isBroadcastFrame)
 
 //-----------------------------------------------------------------------------
 // Frame Process Routines
-// When data are ready in UART_RX_buffer, this function will be called.
+// When data are ready in UART_RX_Buffer, this function will be called.
 // Depending on different roles (STA=0, RELAY=1) of node, deal with the data in
 // different way.
 // STA: process only frames with dest_id == self or dest_id == broadcast_id.
@@ -588,26 +589,26 @@ INTERRUPT(UART0_Interrupt, 4)
         if (RX_Ready == 0) {
             if (idx == 0) {
                 if (Byte == FRAME_HEADER) {
-                    UART_RX_buffer[idx++] = Byte;
+                    UART_RX_Buffer[idx++] = Byte;
                     crc16_init();
                     crc16_add(Byte);
                 }
             } else if (idx == 1) {
                 if (Byte == FRAME_HEADER) {
-                    UART_RX_buffer[idx++] = Byte;
+                    UART_RX_Buffer[idx++] = Byte;
                     crc16_add(Byte);
                 } else
                     idx = 0;
             } else if (idx >= 2 && idx < FRAME_CRC_S) {
-                UART_RX_buffer[idx++] = Byte;
+                UART_RX_Buffer[idx++] = Byte;
                 crc16_add(Byte);
             } else if (idx < FRAME_LEN && idx >= FRAME_CRC_S) {
-                UART_RX_buffer[idx++] = Byte;
+                UART_RX_Buffer[idx++] = Byte;
             }
 
             if (idx == FRAME_LEN) {
-                if (crc16_msb() == UART_RX_buffer[FRAME_CRC_S] &&
-                        crc16_lsb() == UART_RX_buffer[FRAME_CRC_S + 1])
+                if (crc16_msb() == UART_RX_Buffer[FRAME_CRC_S] &&
+                        crc16_lsb() == UART_RX_Buffer[FRAME_CRC_S + 1])
                     RX_Ready = 1;
                 idx = 0;
             }
