@@ -52,6 +52,7 @@
 #define FRAME_ID_LEN        6
 #define PACKAGE_HEAD_BYTe_1 0x55
 #define PACKAGE_HEAD_BYTe_2 0x55
+#define REAPTOR_WAITING_TIME_DURATION 0x03		// normally should be 3 second for repeator delay
 
 
 INTERRUPT_PROTO(UART0_Interrupt, 4);
@@ -443,6 +444,10 @@ void send_frame(void)
 
   // repeat frm handling
   if ((flag_send_repeat_frm_ready== 1) && (AUX == 1)){
+  	if (is_broadcast_frame()== 1)
+		sleep(random(REAPTOR_WAITING_TIME_DURATION));  // waiting random second then send out to avoid broadcast storm
+	else
+		sleep(1 + random(REAPTOR_WAITING_TIME_DURATION));
     for (i=0; i<22; i++){
       SBUF0 = repeator_package[i];
       while (SCON0_TI != 1){
@@ -524,6 +529,7 @@ void sleep(unsigned char seconds)
 
 
 // Protocol TAG definitions
+#define PTAG_SN_CLR		0
 #define PTAG_ACK        1
 #define PTAG_NACK       2
 #define PTAG_POLL       3
@@ -533,6 +539,8 @@ void rx_cmd_process(unsigned short isBroadcastFrame)
 {
   switch (RECV_TAG) {     // CMD tag
     // all *_resonse() below need to fill in UART_TX_buffer
+    case PTAG_SN_CLR:		// that is sn clear frm, do nothing
+		break;
     case PTAG_POLL:
       do_poll_response();   // poll package ready
       flag_send_bck_frm_ready = 1;
@@ -581,14 +589,14 @@ void rx_frame_process(unsigned short role)
   // RELAY specific things
   if (role == 1)
     if (isBroadcastFrame && need_forward) { // change isBroadcastFrame() to isBroadcastFrame @2017-07-08 from eric s -- handling broadcast frm
-      sleep(random(3));
+      //sleep(random(3));
       forward_preparation(); // prepare repeat  frm package
       flag_send_repeat_frm_ready = 1;
       //send_frame();
     } else if (!isMyFrame) { // hanlding single node frm
       if (RECV_SN > sn || (RECV_SN == 0 && sn != 0)) {
         sn = RECV_SN;
-        sleep(1 + random(3));
+        //sleep(1 + random(3));
         forward_preparation(); // only prepare package buffer for repeator
         //send_frame();
         flag_send_repeat_frm_ready = 1;
