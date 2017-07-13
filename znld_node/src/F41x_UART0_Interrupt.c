@@ -77,13 +77,13 @@ U8 RX_Ready =0; // 0: no receive frm ready in UART_RX_buffer or. no need to do p
 static char Byte;
 
 
-unsigned char self_id[FRAME_ID_LEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x05};
+unsigned char self_id[FRAME_ID_LEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x06};
 unsigned char source_id[FRAME_ID_LEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
 
 unsigned char poll_package[UART_BUFFERSIZE];      ///< send back package buffer
 unsigned char repeator_package[UART_BUFFERSIZE];  ///< repeator pckage buffer
 unsigned char UART_RX_buffer[UART_BUFFERSIZE];
-unsigned char role; //0: that is normal node; 1: that is repeator ndoe;  0: STA; 1: RELAY
+unsigned char role; //0: that is normal node; 1: that is repeator node;  0: STA; 1: RELAY
 unsigned char sn; // frame sequence number
 
 //unsigned char flag_receive_frm_ready; // 0: no receive frm ready in UART_RX_buffer or. no need to do process; 1: need to do receive frm process
@@ -107,8 +107,11 @@ void main (void)
   //flag_receive_frm_ready = 0;
   flag_send_bck_frm_ready = 0;
   flag_send_repeat_frm_ready = 0;
-
+  // 2017-7-13 added by bobo
+  role=1;
   IE_EA = 1;
+  //2017-7-13 added by bobo
+  P2 = (P2_B0__BMASK & P2_B0__LOW) | (P2_B1__BMASK & P2_B1__LOW);  // low active   all light power on
 
   while (1)
   {
@@ -519,7 +522,7 @@ void sleep(unsigned char seconds)
   unsigned int k = 0;
 
   for (i=0; i<seconds; i++) {
-    for (j=0; j<2000;j++) {
+    for (j=0; j<1957;j++) {
       for (k=0; k<1000; k++) {
         _nop_ ();
       }
