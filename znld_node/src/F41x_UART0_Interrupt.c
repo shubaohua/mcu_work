@@ -64,7 +64,8 @@ void Timer2_Init (S16);
 void rx_frame_process(unsigned short role);
 void send_frame(void);
 U8 random(unsigned char range);
-void sleep(unsigned char seconds);
+void sleep(unsigned char);
+void msleep(unsigned int);
 unsigned short is_broadcast_frame();
 
 
@@ -77,7 +78,7 @@ U8 RX_Ready =0; // 0: no receive frm ready in UART_RX_buffer or. no need to do p
 static char Byte;
 
 
-unsigned char self_id[FRAME_ID_LEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x06};
+unsigned char self_id[FRAME_ID_LEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x05};
 unsigned char source_id[FRAME_ID_LEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
 
 unsigned char poll_package[UART_BUFFERSIZE];      ///< send back package buffer
@@ -415,11 +416,7 @@ void do_lamp_ctrl_response()
  */
 unsigned char random(unsigned char range)
 {
-  unsigned char value;
-
-  value = rand() / ( 32768 / ( range + 1 ) );
-
-  return value;
+  return (rand()/(32768/(range+1)));
 }
 
 
@@ -449,11 +446,13 @@ void send_frame(void)
   }
 
   // repeat frm handling
-  if ((flag_send_repeat_frm_ready== 1) && (AUX == 1)){
-  	if (is_broadcast_frame()== 1)
-		sleep(random(REAPTOR_WAITING_TIME_DURATION));  // waiting random second then send out to avoid broadcast storm
-	else
-		sleep(1 + random(REAPTOR_WAITING_TIME_DURATION));
+  if ((flag_send_repeat_frm_ready== 1) && (AUX == 1)) {
+    if (is_broadcast_frame()== 1)
+      //sleep(random(REAPTOR_WAITING_TIME_DURATION));  // waiting random second then send out to avoid broadcast storm
+      msleep(random(100)*30);   // waiting random 0 ~ 3000 ms
+    else
+      //sleep(1 + random(REAPTOR_WAITING_TIME_DURATION));
+      msleep(1 + random(100)*30);
     for (i=0; i<22; i++){
       SBUF0 = repeator_package[i];
       while (SCON0_TI != 1){
@@ -517,7 +516,6 @@ unsigned short is_broadcast_frame()
  */
 void sleep(unsigned char seconds)
 {
-  // temp try using for cycle, will use timer in finial code
   unsigned char i = 0;
   unsigned int j = 0;
   unsigned int k = 0;
@@ -533,6 +531,28 @@ void sleep(unsigned char seconds)
   return;
 }
 
+/**
+ * @brief sleep/delay certain milli-seconds
+ *
+ * The amount of time it takes for a single NOP on the target (24.5MHz) is about
+ * 0.5 us, so use NOP with 2k times for one milli-section delay or sleep.
+ *
+ * @param seconds
+ * @return void
+ */
+void msleep(unsigned int millisec)
+{
+  unsigned int i = 0;
+  unsigned int j = 0;
+
+  for (i=0; i<millisec; i++) {
+    for (j=0; j<2000;j++) {
+      _nop_ ();
+    }
+  }
+
+  return;
+}
 
 // Protocol TAG definitions
 #define PTAG_SN_CLR		0
@@ -546,7 +566,7 @@ void rx_cmd_process(unsigned short isBroadcastFrame)
   switch (RECV_TAG) {     // CMD tag
     // all *_resonse() below need to fill in UART_TX_buffer
     case PTAG_SN_CLR:		// that is sn clear frm, do nothing
-		break;
+      break;
     case PTAG_POLL:
       do_poll_response();   // poll package ready
       flag_send_bck_frm_ready = 1;
