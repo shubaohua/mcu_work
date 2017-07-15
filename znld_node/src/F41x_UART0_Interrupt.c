@@ -352,6 +352,7 @@ void do_poll_response(void)
   poll_package[12] =  source_id[4];
   poll_package[13] =  source_id[5];
 
+  sn = RECV_SN + 0x01;
   poll_package[14] =  RECV_SN + 0x01; // frame number add 1
 
   poll_package[15] =  POLL_BACK_TAG;  // response tag number
