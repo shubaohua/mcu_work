@@ -27,7 +27,7 @@
 #include <stdlib.h>         // for rand() usage
 
 
-#define SYSCLK              24500000    ///< SYSCLK frequency in Hz
+#define SYSCLK              11059200    ///< SYSCLK frequency in Hz
 #define BAUDRATE            9600        ///< Baud rate of UART in bps
 #define AUX                 P1_B7       ///< Descriptive name for P1.7
 #define FRAME_SRC_ID_S      2           ///< src address start index
@@ -184,6 +184,10 @@ void PORT_Init (void)
   PCA0CPH0 = 0;
   PCA0CPL1 = 0;
   PCA0CPH1 = 0;
+
+  //external clock initial
+  CLKSEL = 0x31;
+  CLKMUL = 0x02;
 }
 
 
@@ -201,8 +205,16 @@ void PORT_Init (void)
 
 void SYSCLK_Init (void)
 {
-  OSCICN = 0x87;                      // configure internal oscillator for
-  // 24.5MHz
+//  OSCICN = 0x87;                      // configure internal oscillator for, revise by eric S @2017-07-15 to change to external clock
+// 24.5MHz
+
+  // external clock initial 11.0592MHz
+  	PCA0MD = 0x00;
+	OSCXCN = 0x67;
+	msleep(5);
+	while ((OSCXCN & 0x80) != 0x80)
+		;
+
   RSTSRC = 0x04;                      // enable missing clock detector
 }
 
@@ -244,6 +256,9 @@ void UART0_Init (void)
   TL1 = TH1;                          // init Timer1
   TMOD &= ~0xf0;                      // TMOD: timer 1 in 8-bit autoreload
   TMOD |=  0x20;
+
+  TMOD |= 0x02;		//timer 0 for I2C with hongbo's request
+  
   TCON_TR1 = 1;                       // START Timer1
   RX_Ready = 0;                       // Flag showing that UART can transmit
   IP |= 0x10;         // Make UART high priority
