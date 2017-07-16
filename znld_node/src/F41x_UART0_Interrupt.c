@@ -58,6 +58,7 @@
 INTERRUPT_PROTO(UART0_Interrupt, 4);
 
 void SYSCLK_Init (void);
+void OSCILLATOR_Init(void);
 void UART0_Init (void);
 void PORT_Init (void);
 void Timer2_Init (S16);
@@ -100,7 +101,7 @@ void main (void)
 {
   PCA0MD &= ~0x40;                    // WDTE = 0 (clear watchdog timer enable)
 
-  SYSCLK_Init();                      // Initialize Oscillator
+  OSCILLATOR_Init();                  // Initialize Oscillator
   PORT_Init();                        // Initialize Port I/O
   UART0_Init();
 
@@ -190,44 +191,71 @@ void PORT_Init (void)
   CLKMUL = 0x02;
 }
 
-
-//-----------------------------------------------------------------------------
-// SYSCLK_Init
-//-----------------------------------------------------------------------------
-//
-// Return Value : None
-// Parameters   : None
-//
-// This routine initializes the system clock to use the internal oscillator
-// at its maximum frequency.
-// Also enables the Missing Clock Detector.
-//-----------------------------------------------------------------------------
-
+/**
+ * @brief SYSCLK Init
+ *
+ * This routine initializes the system clock to use the internal oscillator
+ * at its maximum frequency.
+ * Also enables the Missing Clock Detector.
+ * 
+ * @return void
+ */
 void SYSCLK_Init (void)
 {
-//  OSCICN = 0x87;                      // configure internal oscillator for, revise by eric S @2017-07-15 to change to external clock
-// 24.5MHz
-
-  // external clock initial 11.0592MHz
-  	PCA0MD = 0x00;
-	OSCXCN = 0x67;
-	msleep(5);
-	while ((OSCXCN & 0x80) != 0x80)
-		;
+  OSCICN = 0x87;                      // configure internal oscillator for
+  // 24.5MHz
 
   RSTSRC = 0x04;                      // enable missing clock detector
 }
 
-//-----------------------------------------------------------------------------
-// UART0_Init
-//-----------------------------------------------------------------------------
-//
-// Return Value : None
-// Parameters   : None
-//
-// Configure the UART0 using Timer1, for <BAUDRATE> and 8-N-1.
-//-----------------------------------------------------------------------------
+/**
+ * @brief OSCILLATOR Init
+ *
+ * This function initializes the system clock to use the external oscillator 
+ * in crystal mode.
+ * 
+ * @return void
+ */
+#if  (SYSCLK <= 20000)	   ///< XFCN Setting Macro
+   #define XFCN 0
+#elif(SYSCLK <= 58000)
+   #define XFCN 1
+#elif(SYSCLK <= 155000)
+   #define XFCN 2
+#elif(SYSCLK <= 415000)
+   #define XFCN 3
+#elif(SYSCLK <= 1100000)
+   #define XFCN 4
+#elif(SYSCLK <= 3100000)
+   #define XFCN 5
+#elif(SYSCLK <= 8200000)
+   #define XFCN 6
+#elif(SYSCLK <= 25000000)
+   #define XFCN 7
+#else
+   #error "Crystal Frequency must be less than 25MHz"
+#endif
 
+void OSCILLATOR_Init (void)
+{
+   OSCXCN = (0x60 | XFCN);
+   msleep(5);
+   while (!(OSCXCN & 0x80));           // Wait for crystal osc. to settle
+   RSTSRC = 0x06;                      // Enable missing clock detector and
+                                       // VDD Monitor reset
+   CLKSEL = 0x01;                      // Select external oscillator as system
+                                       // clock source. /SYSCLK on the port
+                                       // pin is equal to the system clock.
+   OSCICN = 0x00;                      // Disable the internal oscillator.
+}
+
+/**
+ * @brief UART0 Init
+ *
+ * Configure the UART0 using Timer1, for <BAUDRATE> and 8-N-1.
+ *
+ * @return void
+ */
 void UART0_Init (void)
 {
   SCON0 = 0x10;                       // SCON0: 8-bit variable bit rate
