@@ -434,13 +434,12 @@ unsigned char random(unsigned char range)
   return (rand()/(32768/(range+1)));
 }
 
-/**
- * @brief TX routines 
- * 
- * @return void
- */
-#define TX_DELAY_STEP_IN_MSEC   60
-#define TX_DELAY_RAND_RANGE     50
+
+//-----------------------------------------------------------------------------
+// TX Routines
+//-----------------------------------------------------------------------------
+
+// send UART_TX_buffer to UART byte by byte
 void send_frame(void)
 {
   unsigned char i = 0;
@@ -464,9 +463,11 @@ void send_frame(void)
   // repeat frm handling
   if ((flag_send_repeat_frm_ready== 1) && (AUX == 1)) {
     if (is_broadcast_frame()== 1)
-      msleep(random(TX_DELAY_RAND_RANGE)*TX_DELAY_STEP_IN_MSEC);   // waiting random 0 ~ 3000 ms
+      //sleep(random(REAPTOR_WAITING_TIME_DURATION));  // waiting random second then send out to avoid broadcast storm
+      msleep(random(100)*30);   // waiting random 0 ~ 3000 ms
     else
-      msleep(1 + random(TX_DELAY_RAND_RANGE)*TX_DELAY_STEP_IN_MSEC);
+      //sleep(1 + random(REAPTOR_WAITING_TIME_DURATION));
+      msleep(1 + random(100)*30);
     for (i=0; i<22; i++){
       SBUF0 = repeator_package[i];
       while (SCON0_TI != 1){
